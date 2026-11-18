@@ -196,6 +196,7 @@ private fun IkarHome(
     var bubbleEnabled by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val recognizerState = remember { mutableStateOf<SpeechRecognizer?>(null) }
+    var memoryError by remember { mutableStateOf<String?>(null) }
 
     DisposableEffect(Unit) {
         onDispose {
@@ -259,7 +260,6 @@ private fun IkarHome(
         if (granted) beginVoiceRecognition()
         else memoryError = "Autorise le microphone pour parler à IKAR."
     }
-    var memoryError by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
 
     suspend fun refreshMemories() {
