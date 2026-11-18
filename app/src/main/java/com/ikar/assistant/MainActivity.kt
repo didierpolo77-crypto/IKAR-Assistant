@@ -347,9 +347,14 @@ private fun IkarHome(
             fileScanReport = null
             scope.launch {
                 try {
-                    fileScanReport = withContext(Dispatchers.IO) {
+                    val report = withContext(Dispatchers.IO) {
                         FileScanner.scan(context.applicationContext, uri)
                     }
+                    fileScanReport = report
+                    withContext(Dispatchers.IO) {
+                        memoryDao.insert(MemoryEntry(type = "SECURITY_EVENT", content = "Analyse fichier : ${report.fileName} — ${report.verdict} — SHA-256 ${report.sha256}"))
+                    }
+                    refreshMemories()
                 } catch (error: Exception) {
                     memoryError = "Analyse du fichier impossible : ${error.localizedMessage ?: "erreur inconnue"}"
                 } finally {
