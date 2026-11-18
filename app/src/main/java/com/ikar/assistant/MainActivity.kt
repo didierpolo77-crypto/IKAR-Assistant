@@ -333,15 +333,32 @@ private fun IkarHome(
                         }
                     }
                 }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("Lire les réponses à voix haute")
+                    Switch(checked = speakReplies, onCheckedChange = { speakReplies = it })
+                }
                 OutlinedTextField(
                     value = chatInput,
                     onValueChange = { chatInput = it },
                     modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Écris ton message") },
+                    label = { Text("Écris ou dicte ton message") },
                     minLines = 1,
                     maxLines = 4,
                     enabled = !sendingMessage
                 )
+                Button(
+                    onClick = {
+                        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+                            beginVoiceRecognition()
+                        } else {
+                            microphonePermission.launch(Manifest.permission.RECORD_AUDIO)
+                        }
+                    },
+                    enabled = !sendingMessage && !listening,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(if (listening) "Écoute en cours…" else "Parler à IKAR")
+                }
                 Button(
                     onClick = {
                         val question = chatInput.trim()
@@ -375,6 +392,20 @@ private fun IkarHome(
                     Text(if (sendingMessage) "IKAR réfléchit…" else "Envoyer")
                 }
                 Text("Moteur local simple : les réponses générales et la recherche Internet ne sont pas encore intégrées.", style = MaterialTheme.typography.labelSmall)
+            }
+        }
+
+        Card(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Bulle flottante", style = MaterialTheme.typography.titleMedium)
+                Text("Affiche une bulle IKAR au-dessus des autres applications. Android demandera ton autorisation. La bulle ne lit pas l'écran et ne surveille pas les autres applications.")
+                Button(onClick = { onEnableBubble(); bubbleEnabled = true }, modifier = Modifier.fillMaxWidth()) {
+                    Text("Activer la bulle IKAR")
+                }
+                Button(onClick = { onDisableBubble(); bubbleEnabled = false }, modifier = Modifier.fillMaxWidth()) {
+                    Text("Désactiver la bulle")
+                }
+                Text(if (bubbleEnabled) "Activation demandée. Vérifie que la bulle apparaît." else "La bulle est désactivée ou son état n'a pas encore été vérifié.", style = MaterialTheme.typography.bodySmall)
             }
         }
 
