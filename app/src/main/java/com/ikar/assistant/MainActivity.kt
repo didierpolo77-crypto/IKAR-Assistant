@@ -52,6 +52,9 @@ import com.ikar.assistant.security.SpywareScanner
 import com.ikar.assistant.security.SecurityReport
 import com.ikar.assistant.security.FileScanner
 import com.ikar.assistant.security.FileScanReport
+import com.ikar.assistant.security.SecurityCenter
+import com.ikar.assistant.security.FolderRiskReport
+import com.ikar.assistant.security.LinkRiskReport
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
@@ -205,6 +208,12 @@ private fun IkarHome(
     var securityScanRunning by remember { mutableStateOf(false) }
     var fileScanReport by remember { mutableStateOf<FileScanReport?>(null) }
     var fileScanRunning by remember { mutableStateOf(false) }
+    var folderReport by remember { mutableStateOf<FolderRiskReport?>(null) }
+    var folderScanRunning by remember { mutableStateOf(false) }
+    var linkInput by remember { mutableStateOf("") }
+    var linkReport by remember { mutableStateOf<LinkRiskReport?>(null) }
+    var emergencyMode by remember { mutableStateOf(SecurityCenter.isEmergency(context)) }
+    var securityEvents by remember { mutableStateOf<List<MemoryEntry>>(emptyList()) }
 
     DisposableEffect(Unit) {
         onDispose {
@@ -273,6 +282,7 @@ private fun IkarHome(
     suspend fun refreshMemories() {
         val allEntries = withContext(Dispatchers.IO) { memoryDao.getAll() }
         memories = allEntries.filter { it.type == "NOTE" || it.type == "OCR" }
+        securityEvents = allEntries.filter { it.type == "SECURITY_EVENT" }.take(30)
         chatMessages = allEntries.filter { it.type == "USER_MESSAGE" || it.type == "ASSISTANT_MESSAGE" }.take(30).reversed()
     }
 
@@ -307,6 +317,22 @@ private fun IkarHome(
                         }
                     }
                 }
+            }
+        }
+    }
+
+    val folderPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+        if (uri != null) {
+            runCatching { context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
+            folderScanRunning = true
+            scope.launch {
+                try {
+                    val report = withContext(Dispatchers.IO) { SecurityCenter.auditFolder(context.applicationContext, uri) }
+                    folderReport = report
+                    withContext(Dispatchers.IO) { memoryDao.insert(MemoryEntry(type = "SECURITY_EVENT", content = "Anti-ransomware — ${report.message} Fichiers examinés : ${report.inspected}, changements : ${report.changed}.")) }
+                    refreshMemories()
+                } catch (error: Exception) { memoryError = "Audit du dossier impossible : ${error.localizedMessage ?: "erreur inconnue"}" }
+                finally { folderScanRunning = false }
             }
         }
     }
@@ -412,6 +438,68 @@ private fun IkarHome(
                     }
                     Text("Cette version ne compare pas encore l'empreinte à une base de signatures de malwares et n'exécute pas YARA/ClamAV. Un résultat rassurant ne garantit donc pas que le fichier est sûr.", style = MaterialTheme.typography.bodySmall)
                 } ?: Text("Aucun fichier analysé pour le moment.", style = MaterialTheme.typography.bodySmall)
+            }
+        }
+
+
+        Card(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Centre de sécurité avancé", style = MaterialTheme.typography.titleLarge)
+                Text("Anti-ransomware : choisis un dossier important (par exemple Documents). IKAR compare les noms, tailles et dates de modification entre deux audits. Ce contrôle manuel n'est pas une surveillance en temps réel.")
+                Button(onClick = { folderPicker.launch(null) }, enabled = !folderScanRunning, modifier = Modifier.fillMaxWidth()) {
+                    Text(if (folderScanRunning) "Audit en cours…" else "Choisir un dossier à surveiller")
+                }
+                folderReport?.let { report ->
+                    Text(report.message, style = MaterialTheme.typography.titleMedium)
+                    Text("${report.inspected} fichiers examinés · ${report.changed} changements")
+                    report.suspiciousNames.forEach { Text("Extension suspecte : $it", style = MaterialTheme.typography.bodySmall) }
+                }
+                Divider()
+                Text("Protection anti-phishing", style = MaterialTheme.typography.titleMedium)
+                OutlinedTextField(value = linkInput, onValueChange = { linkInput = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Colle un lien à vérifier") }, singleLine = true)
+                Button(onClick = {
+                    val report = SecurityCenter.checkLink(linkInput)
+                    linkReport = report
+                    scope.launch {
+                        withContext(Dispatchers.IO) {
+                            memoryDao.insert(MemoryEntry(type = "SECURITY_EVENT", content = "Vérification lien : ${report.url} — " + if (report.suspicious) "signaux suspects : ${report.reasons.joinToString()}" else "aucun signal heuristique"))
+                        }
+                        refreshMemories()
+                    }
+                }, enabled = linkInput.isNotBlank(), modifier = Modifier.fillMaxWidth()) { Text("Vérifier le lien") }
+                linkReport?.let { report ->
+                    Text(if (report.suspicious) "Lien à risque — ne l'ouvre pas avant vérification" else "Aucun signal heuristique détecté", style = MaterialTheme.typography.titleSmall)
+                    report.reasons.forEach { Text("• $it", style = MaterialTheme.typography.bodySmall) }
+                    Text("Analyse locale heuristique : elle ne consulte pas encore une base de réputation web et ne peut pas garantir qu'un lien est sûr.", style = MaterialTheme.typography.bodySmall)
+                }
+                Divider()
+                Text("Mode urgence", style = MaterialTheme.typography.titleMedium)
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Verrouillage de confidentialité")
+                        Text("Masque les captures d'écran et arrête la bulle IKAR. Cela ne désactive pas globalement le micro ou la caméra Android.", style = MaterialTheme.typography.bodySmall)
+                    }
+                    Switch(checked = emergencyMode, onCheckedChange = { enabled ->
+                        emergencyMode = enabled
+                        SecurityCenter.setEmergency(context, enabled)
+                        val window = (context as? MainActivity)?.window
+                        if (enabled) {
+                            window?.setFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE, android.view.WindowManager.LayoutParams.FLAG_SECURE)
+                            context.stopService(Intent(context, FloatingAssistantService::class.java))
+                            bubbleEnabled = false
+                        } else {
+                            window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
+                        }
+                        scope.launch { withContext(Dispatchers.IO) { memoryDao.insert(MemoryEntry(type = "SECURITY_EVENT", content = if (enabled) "Mode urgence activé : écran protégé et bulle arrêtée." else "Mode urgence désactivé.")) }; refreshMemories() }
+                    })
+                }
+                Divider()
+                Text("Journal de sécurité", style = MaterialTheme.typography.titleMedium)
+                if (securityEvents.isEmpty()) Text("Aucune alerte ou analyse enregistrée pour le moment.", style = MaterialTheme.typography.bodySmall)
+                else securityEvents.forEach { event ->
+                    Text("• ${java.text.DateFormat.getDateTimeInstance().format(java.util.Date(event.createdAt))} — ${event.content}", style = MaterialTheme.typography.bodySmall)
+                }
+                Text("Mises à jour sécurisées : le canal de signatures distantes n'est pas encore configuré. IKAR n'installe aucune signature non vérifiée et ne télécharge pas de mise à jour en arrière-plan à ce stade.", style = MaterialTheme.typography.bodySmall)
             }
         }
 
