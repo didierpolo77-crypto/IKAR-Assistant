@@ -4,7 +4,6 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
-import androidx.room.TypeConverters
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.ikar.assistant.security.PendingActionEntity
@@ -14,7 +13,6 @@ import com.ikar.assistant.security.PendingActionEntity
     version = 2,
     exportSchema = false
 )
-@TypeConverters(MemoryContentConverter::class)
 abstract class MemoryDatabase : RoomDatabase() {
     abstract fun memoryDao(): MemoryDao
 
