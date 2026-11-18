@@ -39,6 +39,7 @@ import androidx.room.Room
 import com.ikar.assistant.data.MemoryDatabase
 import com.ikar.assistant.data.MemoryEntry
 import com.ikar.assistant.data.MemoryDao
+import com.ikar.assistant.ai.OfflineChatEngine
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
@@ -141,11 +142,16 @@ private fun IkarHome(
     var connectedMode by remember { mutableStateOf(false) }
     var noteText by remember { mutableStateOf("") }
     var memories by remember { mutableStateOf<List<MemoryEntry>>(emptyList()) }
+    var chatMessages by remember { mutableStateOf<List<MemoryEntry>>(emptyList()) }
+    var chatInput by remember { mutableStateOf("") }
+    var sendingMessage by remember { mutableStateOf(false) }
     var memoryError by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
 
     suspend fun refreshMemories() {
-        memories = withContext(Dispatchers.IO) { memoryDao.getAll() }
+        val allEntries = withContext(Dispatchers.IO) { memoryDao.getAll() }
+        memories = allEntries.filter { it.type == "NOTE" || it.type == "OCR" }
+        chatMessages = allEntries.filter { it.type == "USER_MESSAGE" || it.type == "ASSISTANT_MESSAGE" }.take(30).reversed()
     }
 
     LaunchedEffect(memoryDao) {
@@ -189,6 +195,73 @@ private fun IkarHome(
     ) {
         Text("IKAR Assistant", style = MaterialTheme.typography.headlineMedium)
         Text("Assistant Android — mémoire locale V2", style = MaterialTheme.typography.bodyMedium)
+
+        Card(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("Discussion hors connexion", style = MaterialTheme.typography.titleLarge)
+                Text("IKAR recherche dans tes notes et tes textes extraits. Les échanges sont enregistrés sur ce téléphone.", style = MaterialTheme.typography.bodySmall)
+                if (chatMessages.isEmpty()) {
+                    Text("Bonjour ! Pose une question sur une information que tu as déjà enregistrée.", style = MaterialTheme.typography.bodyMedium)
+                } else {
+                    chatMessages.forEach { message ->
+                        val fromUser = message.type == "USER_MESSAGE"
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = androidx.compose.material3.CardDefaults.cardColors(
+                                containerColor = if (fromUser) MaterialTheme.colorScheme.primaryContainer
+                                else MaterialTheme.colorScheme.surfaceVariant
+                            )
+                        ) {
+                            Column(Modifier.padding(12.dp)) {
+                                Text(if (fromUser) "Toi" else "IKAR", style = MaterialTheme.typography.labelMedium)
+                                Text(message.content, style = MaterialTheme.typography.bodyMedium)
+                            }
+                        }
+                    }
+                }
+                OutlinedTextField(
+                    value = chatInput,
+                    onValueChange = { chatInput = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Écris ton message") },
+                    minLines = 1,
+                    maxLines = 4,
+                    enabled = !sendingMessage
+                )
+                Button(
+                    onClick = {
+                        val question = chatInput.trim()
+                        if (question.isNotEmpty() && !sendingMessage) {
+                            sendingMessage = true
+                            chatInput = ""
+                            scope.launch {
+                                try {
+                                    val answer = withContext(Dispatchers.IO) {
+                                        memoryDao.insert(MemoryEntry(type = "USER_MESSAGE", content = question))
+                                        val savedEntries = memoryDao.getAll()
+                                        val reply = OfflineChatEngine.answer(question, savedEntries)
+                                        memoryDao.insert(MemoryEntry(type = "ASSISTANT_MESSAGE", content = reply))
+                                        reply
+                                    }
+                                    refreshMemories()
+                                    memoryError = null
+                                } catch (error: Exception) {
+                                    chatInput = question
+                                    memoryError = "Impossible d'enregistrer la conversation. Réessaie."
+                                } finally {
+                                    sendingMessage = false
+                                }
+                            }
+                        }
+                    },
+                    enabled = chatInput.isNotBlank() && !sendingMessage,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(if (sendingMessage) "IKAR réfléchit…" else "Envoyer")
+                }
+                Text("Moteur local simple : les réponses générales et la recherche Internet ne sont pas encore intégrées.", style = MaterialTheme.typography.labelSmall)
+            }
+        }
 
         Card(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
