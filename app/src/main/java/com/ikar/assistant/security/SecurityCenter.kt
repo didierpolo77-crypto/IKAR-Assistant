@@ -24,22 +24,52 @@ object SecurityCenter {
 
     fun checkLink(raw: String): LinkRiskReport {
         val value = raw.trim()
-        val reasons = mutableListOf<String>()
+        val reasons = linkedSetOf<String>()
         val parsed = runCatching { URI(value) }.getOrNull()
-        if (parsed == null || parsed.scheme !in listOf("http", "https") || parsed.host.isNullOrBlank()) {
-            reasons += "Adresse web invalide ou protocole non sécurisé."
-        } else {
-            val host = parsed.host.lowercase(Locale.ROOT)
-            if (parsed.scheme.equals("http", true)) reasons += "Connexion HTTP non chiffrée."
-            if (host.startsWith("xn--") || host.contains(".xn--")) reasons += "Nom de domaine internationalisé pouvant masquer des caractères."
-            if (host.matches(Regex("""^\d{1,3}(\.\d{1,3}){3}$"""))) reasons += "Lien utilisant directement une adresse IP."
-            if (host.count { it == '.' } >= 4) reasons += "Sous-domaines nombreux."
-            if (host.contains("secure-login") || host.contains("verify-account") || host.contains("password-reset")) {
-                reasons += "Mots fréquemment utilisés dans des liens d'hameçonnage."
-            }
-            if (parsed.userInfo != null) reasons += "Le lien contient des informations avant le nom de domaine."
+        if (value.length > 2048) reasons += "Adresse anormalement longue."
+        if (parsed == null || parsed.scheme?.lowercase(Locale.ROOT) !in listOf("http", "https") ||
+            parsed.host.isNullOrBlank()
+        ) {
+            reasons += "Adresse web invalide ou protocole non pris en charge."
+            return LinkRiskReport(value, true, reasons.toList())
         }
-        return LinkRiskReport(value, reasons.isNotEmpty(), reasons)
+
+        val host = parsed.host.lowercase(Locale.ROOT).trimEnd('.')
+        val asciiHost = runCatching { java.net.IDN.toASCII(host) }.getOrDefault(host)
+        val unicodeHost = runCatching { java.net.IDN.toUnicode(host) }.getOrDefault(host)
+        if (!parsed.scheme.equals("https", true)) reasons += "Connexion HTTP non chiffrée."
+        if (host != asciiHost || unicodeHost != host) reasons += "Nom de domaine avec caractères internationalisés : vérifie chaque caractère."
+        if (asciiHost.startsWith("xn--") || asciiHost.contains(".xn--")) reasons += "Nom de domaine punycode pouvant masquer des caractères ressemblants."
+        if (asciiHost.matches(Regex("""^\\d{1,3}(\\.\\d{1,3}){3}$"""))) reasons += "Lien utilisant directement une adresse IP."
+        if (asciiHost.count { it == '.' } >= 4) reasons += "Sous-domaines particulièrement nombreux."
+        if (parsed.userInfo != null) reasons += "Le lien contient des informations avant le nom de domaine : technique parfois utilisée pour tromper."
+        if (asciiHost in setOf("bit.ly", "tinyurl.com", "t.co", "is.gd", "cutt.ly", "rb.gy", "tiny.cc")) {
+            reasons += "Lien raccourci : la destination réelle est masquée."
+        }
+        val pathAndQuery = (parsed.rawPath.orEmpty() + "?" + parsed.rawQuery.orEmpty()).lowercase(Locale.ROOT)
+        if (listOf("login", "verify", "password", "wallet", "bank", "secure", "account").any { it in pathAndQuery }) {
+            reasons += "Le chemin contient des termes souvent utilisés dans des pages de connexion ou de vérification."
+        }
+        if (listOf("redirect=", "return=", "continue=", "next=", "url=").any { it in pathAndQuery }) {
+            reasons += "Paramètre de redirection détecté : vérifie la destination finale."
+        }
+        val brandDomains = mapOf(
+            "paypal" to "paypal.com",
+            "google" to "google.com",
+            "facebook" to "facebook.com",
+            "microsoft" to "microsoft.com",
+            "apple" to "apple.com",
+            "amazon" to "amazon.com"
+        )
+        brandDomains.forEach { (brand, officialDomain) ->
+            if (asciiHost.contains(brand) && asciiHost != officialDomain && !asciiHost.endsWith(".$officialDomain")) {
+                reasons += "Le nom de domaine mentionne $brand sans correspondre à son domaine officiel habituel."
+            }
+        }
+        val suspiciousTlds = setOf(".zip", ".mov", ".click", ".work", ".support", ".country", ".kim")
+        if (suspiciousTlds.any { asciiHost.endsWith(it) }) reasons += "Extension de domaine parfois utilisée dans des campagnes abusives ; vérification supplémentaire conseillée."
+
+        return LinkRiskReport(value, reasons.isNotEmpty(), reasons.toList())
     }
 
     /**
