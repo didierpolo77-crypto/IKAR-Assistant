@@ -4,17 +4,21 @@ import com.ikar.assistant.data.MemoryEntry
 import java.text.Normalizer
 import java.util.Locale
 
-/** Lightweight offline retrieval assistant; not a generative language model. */
+/** Offline assistant: deterministic safety reasoning plus local memory retrieval. */
 object OfflineChatEngine {
     fun answer(question: String, memories: List<MemoryEntry>): String {
         val normalized = normalize(question.trim())
         if (normalized.isBlank()) return "Écris une question pour commencer."
 
+        IkarDecisionEngine.evaluate(question)?.let { decision ->
+            return "Analyse IKAR — ${decision.topic} (${decision.confidence})\n\n${decision.response}\n\nJe me base sur les mots de ta demande, pas sur une inspection automatique de ton téléphone."
+        }
+
         if (isGreeting(normalized)) {
-            return "Bonjour ! Je suis IKAR. Je fonctionne actuellement hors connexion. Tu peux me demander de retrouver une information enregistrée dans ta mémoire."
+            return "Bonjour ! Je suis IKAR. Je peux retrouver tes notes locales et t'aider à évaluer certaines situations de sécurité. Mon raisonnement hors connexion utilise actuellement des règles explicites, pas encore un grand modèle d'IA."
         }
         if (normalized.contains("qui es tu")) {
-            return "Je suis IKAR Assistant. Pour le moment, mon moteur hors connexion recherche dans tes notes et les textes extraits de tes images."
+            return "Je suis IKAR Assistant. Je combine une mémoire locale, la lecture de texte dans les images, des outils de vérification de fichiers et une première couche de décision hors connexion. Je ne suis pas encore un modèle conversationnel général comme JARVIS."
         }
         if (normalized.contains("que sais tu de moi") || normalized.contains("ma memoire") || normalized.contains("mes notes")) {
             val saved = memories.filter { it.type == "NOTE" || it.type == "OCR" }
