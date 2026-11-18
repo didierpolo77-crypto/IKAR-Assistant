@@ -29,7 +29,7 @@ object ActionSafetyPolicy {
         "show_security_report"
     )
 
-    fun assess(actionId: String, hasExplicitUserConfirmation: Boolean = false): Assessment {
+    fun assess(actionId: String): Assessment {
         val id = actionId.trim().lowercase()
         return when {
             id in readOnly -> Assessment(
