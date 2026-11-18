@@ -1,0 +1,61 @@
+package com.ikar.assistant.ai
+
+import com.ikar.assistant.data.MemoryEntry
+import java.text.Normalizer
+import java.util.Locale
+
+/** Lightweight offline retrieval assistant; not a generative language model. */
+object OfflineChatEngine {
+    fun answer(question: String, memories: List<MemoryEntry>): String {
+        val normalized = normalize(question.trim())
+        if (normalized.isBlank()) return "Écris une question pour commencer."
+
+        if (isGreeting(normalized)) {
+            return "Bonjour ! Je suis IKAR. Je fonctionne actuellement hors connexion. Tu peux me demander de retrouver une information enregistrée dans ta mémoire."
+        }
+        if (normalized.contains("qui es tu")) {
+            return "Je suis IKAR Assistant. Pour le moment, mon moteur hors connexion recherche dans tes notes et les textes extraits de tes images."
+        }
+        if (normalized.contains("que sais tu de moi") || normalized.contains("ma memoire") || normalized.contains("mes notes")) {
+            val saved = memories.filter { it.type == "NOTE" || it.type == "OCR" }
+            return if (saved.isEmpty()) "Ta mémoire locale ne contient encore aucune note ni aucun texte extrait."
+            else "J'ai " + saved.size + " élément(s) dans ta mémoire locale. Pose une question précise pour que je recherche l'information correspondante."
+        }
+
+        val stopWords = setOf("comment", "pourquoi", "quand", "quel", "quelle", "quels", "quelles",
+            "est", "sont", "les", "des", "une", "un", "dans", "pour", "avec", "sur", "qui", "que",
+            "quoi", "mon", "ma", "mes", "ton", "ta", "tes", "du", "de", "la", "le", "et", "ou",
+            "je", "tu", "il", "elle", "peux", "peut", "me", "moi", "ce", "cette", "ces")
+        val terms = normalized.split(Regex("[^\\p{L}\\p{N}]+"))
+            .filter { it.length >= 3 && it !in stopWords }.toSet()
+
+        if (terms.isEmpty()) return "Je n'ai pas assez de mots-clés pour chercher dans ta mémoire. Reformule avec un ou deux termes importants."
+
+        val ranked = memories.filter { it.type == "NOTE" || it.type == "OCR" }
+            .map { entry ->
+                val content = normalize(entry.content)
+                val words = content.split(Regex("[^\\p{L}\\p{N}]+")).toSet()
+                entry to terms.count { it in words || content.contains(it) }
+            }
+            .filter { it.second > 0 }
+            .sortedByDescending { it.second }
+            .take(3)
+
+        if (ranked.isEmpty()) return "Je n'ai pas trouvé cette information dans ta mémoire locale. Sans connexion, je ne peux pas encore interroger un moteur de connaissances général. Enregistre une note contenant cette information pour que je puisse la retrouver plus tard."
+
+        val excerpts = ranked.joinToString("\\n\\n") { (entry, score) ->
+            val label = if (entry.type == "OCR") "Texte extrait d'image" else "Note personnelle"
+            "• " + label + " (correspondance : " + score + ") :\\n" + entry.content.trim().take(700)
+        }
+        return "Voici ce que j'ai retrouvé dans ta mémoire locale :\\n\\n" + excerpts +
+            "\\n\\nCes résultats proviennent uniquement des données enregistrées sur ce téléphone."
+    }
+
+    private fun isGreeting(value: String): Boolean =
+        value in setOf("salut", "bonjour", "bonsoir", "hello", "coucou", "slt", "bon matin") ||
+            value.startsWith("salut ") || value.startsWith("bonjour ") || value.startsWith("bonsoir ")
+
+    private fun normalize(value: String): String =
+        Normalizer.normalize(value.lowercase(Locale.ROOT), Normalizer.Form.NFD)
+            .replace(Regex("\\p{Mn}+"), "").replace("’", "'").trim()
+}
