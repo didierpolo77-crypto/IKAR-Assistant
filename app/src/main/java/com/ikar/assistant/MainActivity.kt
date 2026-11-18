@@ -48,6 +48,8 @@ import com.ikar.assistant.data.MemoryDatabase
 import com.ikar.assistant.data.MemoryEntry
 import com.ikar.assistant.data.MemoryDao
 import com.ikar.assistant.ai.OfflineChatEngine
+import com.ikar.assistant.security.SpywareScanner
+import com.ikar.assistant.security.SecurityReport
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
@@ -197,6 +199,8 @@ private fun IkarHome(
     val context = LocalContext.current
     val recognizerState = remember { mutableStateOf<SpeechRecognizer?>(null) }
     var memoryError by remember { mutableStateOf<String?>(null) }
+    var securityReport by remember { mutableStateOf<SecurityReport?>(null) }
+    var securityScanRunning by remember { mutableStateOf(false) }
 
     DisposableEffect(Unit) {
         onDispose {
@@ -309,6 +313,58 @@ private fun IkarHome(
     ) {
         Text("IKAR Assistant", style = MaterialTheme.typography.headlineMedium)
         Text("Assistant Android — mémoire locale V2", style = MaterialTheme.typography.bodyMedium)
+
+        Card(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Protection anti-espionnage", style = MaterialTheme.typography.titleLarge)
+                Text("Analyse locale des permissions sensibles et des accès spéciaux activés. Les résultats sont des signaux de risque, pas une preuve qu'une application est malveillante.")
+                Button(
+                    onClick = {
+                        if (!securityScanRunning) {
+                            securityScanRunning = true
+                            scope.launch {
+                                try {
+                                    securityReport = withContext(Dispatchers.IO) {
+                                        SpywareScanner.scan(context.applicationContext)
+                                    }
+                                    memoryError = null
+                                } catch (error: Exception) {
+                                    memoryError = "Analyse de sécurité impossible : ${error.localizedMessage ?: "erreur inconnue"}"
+                                } finally {
+                                    securityScanRunning = false
+                                }
+                            }
+                        }
+                    },
+                    enabled = !securityScanRunning,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(if (securityScanRunning) "Analyse en cours…" else "Analyser les applications")
+                }
+                securityReport?.let { report ->
+                    Text("${report.scannedCount} application(s) examinée(s) · ${report.findings.size} signal(aux) à vérifier")
+                    Text("Accessibilité activée : ${report.enabledAccessibilityPackages.size} · Accès aux notifications : ${report.enabledNotificationListenerPackages.size} · Administrateurs actifs : ${report.activeDeviceAdminPackages.size}", style = MaterialTheme.typography.bodySmall)
+                    if (report.findings.isEmpty()) {
+                        Text("Aucun signal élevé détecté par les contrôles actuels.")
+                    } else {
+                        report.findings.take(12).forEach { finding ->
+                            Card(Modifier.fillMaxWidth()) {
+                                Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    Text(finding.label, style = MaterialTheme.typography.titleSmall)
+                                    Text(finding.packageName, style = MaterialTheme.typography.labelSmall)
+                                    Text("Indice de risque : ${finding.score}", style = MaterialTheme.typography.labelMedium)
+                                    finding.reasons.forEach { reason ->
+                                        Text("• $reason", style = MaterialTheme.typography.bodySmall)
+                                    }
+                                }
+                            }
+                        }
+                        if (report.findings.size > 12) Text("12 premiers résultats affichés sur ${report.findings.size}.")
+                    }
+                    Text("Vérifie l'identité de l'application dans Android avant de retirer un accès ou de la désinstaller. IKAR ne supprime rien automatiquement.", style = MaterialTheme.typography.bodySmall)
+                } ?: Text("Aucune analyse effectuée pour le moment.", style = MaterialTheme.typography.bodySmall)
+            }
+        }
 
         Card(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
