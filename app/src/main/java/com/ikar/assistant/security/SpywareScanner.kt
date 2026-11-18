@@ -6,7 +6,6 @@ import android.content.Context
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.provider.Settings
-import java.util.Locale
 
 data class AppRisk(
     val label: String,
@@ -80,8 +79,8 @@ object SpywareScanner {
             sensitivePermissions.forEach { (permission, rule) ->
                 if (permission in requested) {
                     val index = packageInfo?.requestedPermissions?.indexOf(permission) ?: -1
-                    val granted = index >= 0 && permissionFlags.getOrNull(index)
-                        ?.and(PackageManager.REQUESTED_PERMISSION_GRANTED) != 0
+                    val granted = index >= 0 && ((permissionFlags.getOrNull(index) ?: 0)
+                        and PackageManager.REQUESTED_PERMISSION_GRANTED) != 0
                     reasons += if (granted) "${rule.label} — autorisation accordée" else rule.label
                     score += rule.weight + if (granted) 1 else 0
                 }
