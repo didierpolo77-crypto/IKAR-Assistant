@@ -62,6 +62,7 @@ import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.ikar.assistant.security.FolderAuditScheduler
 
 private const val CHANNEL_ID = "ikar_general"
 
@@ -214,6 +215,8 @@ private fun IkarHome(
     var fileScanRunning by remember { mutableStateOf(false) }
     var folderReport by remember { mutableStateOf<FolderRiskReport?>(null) }
     var folderScanRunning by remember { mutableStateOf(false) }
+    var folderMonitoringEnabled by remember { mutableStateOf(context.getSharedPreferences("ikar_security_center", android.content.Context.MODE_PRIVATE).getBoolean("folder_monitoring_enabled", false)) }
+    var savedFolderUri by remember { mutableStateOf(context.getSharedPreferences("ikar_security_center", android.content.Context.MODE_PRIVATE).getString("monitored_folder_uri", null)) }
     var linkInput by remember { mutableStateOf("") }
     var linkReport by remember { mutableStateOf<LinkRiskReport?>(null) }
     var emergencyMode by remember { mutableStateOf(SecurityCenter.isEmergency(context)) }
@@ -328,6 +331,8 @@ private fun IkarHome(
     val folderPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         if (uri != null) {
             runCatching { context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
+            savedFolderUri = uri.toString()
+            context.getSharedPreferences("ikar_security_center", android.content.Context.MODE_PRIVATE).edit().putString("monitored_folder_uri", uri.toString()).apply()
             folderScanRunning = true
             scope.launch {
                 try {
@@ -463,6 +468,34 @@ private fun IkarHome(
                     Text("${report.inspected} fichiers examinés · ${report.changed} changements")
                     report.suspiciousNames.forEach { Text("Extension suspecte : $it", style = MaterialTheme.typography.bodySmall) }
                 }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Surveillance périodique en arrière-plan")
+                        Text(
+                            if (savedFolderUri == null) "Choisis d'abord un dossier pour autoriser cette surveillance."
+                            else "IKAR comparera périodiquement les fichiers de ce dossier et signalera les changements importants. Ce n'est pas une protection en temps réel.",
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                    Switch(
+                        checked = folderMonitoringEnabled,
+                        enabled = savedFolderUri != null,
+                        onCheckedChange = { enabled ->
+                            folderMonitoringEnabled = enabled
+                            context.getSharedPreferences("ikar_security_center", android.content.Context.MODE_PRIVATE)
+                                .edit().putBoolean("folder_monitoring_enabled", enabled).apply()
+                            if (enabled) FolderAuditScheduler.enable(context)
+                            else FolderAuditScheduler.disable(context)
+                            scope.launch {
+                                withContext(Dispatchers.IO) {
+                                    memoryDao.insert(MemoryEntry(type = "SECURITY_EVENT", content = if (enabled) "Surveillance périodique du dossier activée avec autorisation." else "Surveillance périodique du dossier désactivée."))
+                                }
+                                refreshMemories()
+                            }
+                        }
+                    )
+                }
+                Text("Fréquence minimale Android : 15 minutes, mais le système peut retarder les contrôles pour économiser la batterie.", style = MaterialTheme.typography.bodySmall)
                 Divider()
                 Text("Protection anti-phishing", style = MaterialTheme.typography.titleMedium)
                 OutlinedTextField(value = linkInput, onValueChange = { linkInput = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Colle un lien à vérifier") }, singleLine = true)
