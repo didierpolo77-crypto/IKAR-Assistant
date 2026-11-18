@@ -5,15 +5,24 @@ import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import com.ikar.assistant.security.PendingActionEntity
 
 @Dao
 interface MemoryDao {
     @Insert
-    suspend fun insert(entry: MemoryEntry): Long
+    suspend fun insertStored(entry: MemoryEntry): Long
+
+    @Transaction
+    suspend fun insert(entry: MemoryEntry): Long =
+        insertStored(entry.copy(content = MemoryCrypto.encrypt(entry.content)))
 
     @Query("SELECT * FROM memory_entries ORDER BY createdAt DESC")
-    suspend fun getAll(): List<MemoryEntry>
+    suspend fun getAllStored(): List<MemoryEntry>
+
+    @Transaction
+    suspend fun getAll(): List<MemoryEntry> =
+        getAllStored().map { it.copy(content = MemoryCrypto.decrypt(it.content)) }
 
     @Delete
     suspend fun delete(entry: MemoryEntry)
