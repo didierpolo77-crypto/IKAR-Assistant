@@ -11,6 +11,9 @@ import android.speech.tts.TextToSpeech
 import java.util.Locale
 import android.os.Build
 import android.os.Bundle
+import android.speech.RecognitionListener
+import android.speech.RecognizerIntent
+import android.speech.SpeechRecognizer
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -35,6 +38,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
@@ -187,6 +191,74 @@ private fun IkarHome(
     var chatMessages by remember { mutableStateOf<List<MemoryEntry>>(emptyList()) }
     var chatInput by remember { mutableStateOf("") }
     var sendingMessage by remember { mutableStateOf(false) }
+    var speakReplies by remember { mutableStateOf(true) }
+    var listening by remember { mutableStateOf(false) }
+    var bubbleEnabled by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    val recognizerState = remember { mutableStateOf<SpeechRecognizer?>(null) }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            recognizerState.value?.destroy()
+            recognizerState.value = null
+        }
+    }
+
+    fun beginVoiceRecognition() {
+        try {
+            if (!SpeechRecognizer.isRecognitionAvailable(context)) {
+                memoryError = "Aucun service de reconnaissance vocale n'est disponible."
+                return
+            }
+            val recognizer = if (Build.VERSION.SDK_INT >= 31 &&
+                SpeechRecognizer.isOnDeviceRecognitionAvailable(context)
+            ) SpeechRecognizer.createOnDeviceSpeechRecognizer(context)
+            else SpeechRecognizer.createSpeechRecognizer(context)
+            recognizerState.value?.destroy()
+            recognizerState.value = recognizer
+            recognizer.setRecognitionListener(object : RecognitionListener {
+                override fun onReadyForSpeech(params: Bundle?) { listening = true }
+                override fun onBeginningOfSpeech() { listening = true }
+                override fun onRmsChanged(rmsdB: Float) {}
+                override fun onBufferReceived(buffer: ByteArray?) {}
+                override fun onEndOfSpeech() { listening = false }
+                override fun onError(error: Int) {
+                    listening = false
+                    recognizer.destroy()
+                    recognizerState.value = null
+                    memoryError = "Échec de la reconnaissance vocale (code $error). Vérifie les services vocaux et la langue française."
+                }
+                override fun onResults(results: Bundle?) {
+                    listening = false
+                    val spoken = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()
+                    if (!spoken.isNullOrBlank()) chatInput = spoken
+                    recognizer.destroy()
+                    recognizerState.value = null
+                }
+                override fun onPartialResults(partialResults: Bundle?) {}
+                override fun onEvent(eventType: Int, params: Bundle?) {}
+            })
+            val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE, "fr-FR")
+                putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
+                putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false)
+            }
+            recognizer.startListening(intent)
+            listening = true
+            memoryError = null
+        } catch (error: Exception) {
+            listening = false
+            memoryError = "Impossible de démarrer le microphone : " + (error.localizedMessage ?: "service indisponible")
+        }
+    }
+
+    val microphonePermission = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) beginVoiceRecognition()
+        else memoryError = "Autorise le microphone pour parler à IKAR."
+    }
     var memoryError by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
 
@@ -287,6 +359,7 @@ private fun IkarHome(
                                     }
                                     refreshMemories()
                                     memoryError = null
+                                    if (speakReplies) onSpeak(answer)
                                 } catch (error: Exception) {
                                     chatInput = question
                                     memoryError = "Impossible d'enregistrer la conversation. Réessaie."
