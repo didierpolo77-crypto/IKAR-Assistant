@@ -64,6 +64,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.ikar.assistant.security.FolderAuditScheduler
+import com.ikar.assistant.diagnostics.RuntimeDiagnostics
 
 private const val CHANNEL_ID = "ikar_general"
 
@@ -208,6 +209,7 @@ private fun IkarHome(
     var listening by remember { mutableStateOf(false) }
     var bubbleEnabled by remember { mutableStateOf(false) }
     val context = LocalContext.current
+    val runtimeSnapshot = remember { RuntimeDiagnostics.capture(context) }
     val recognizerState = remember { mutableStateOf<SpeechRecognizer?>(null) }
     var memoryError by remember { mutableStateOf<String?>(null) }
     var securityReport by remember { mutableStateOf<SecurityReport?>(null) }
@@ -463,6 +465,17 @@ private fun IkarHome(
             }
         }
 
+
+        Card(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("Diagnostic de l'appareil", style = MaterialTheme.typography.titleMedium)
+                Text("Processus IKAR : ${if (runtimeSnapshot.is32BitProcess) "32 bits" else "64 bits"} · ABI : ${runtimeSnapshot.supportedAbis.joinToString()}")
+                Text("RAM totale : ${runtimeSnapshot.totalMemoryMb} Mo · mémoire IKAR (PSS) : ${runtimeSnapshot.appPssKb / 1024} Mo")
+                Text("Batterie : ${runtimeSnapshot.batteryPercent}% · économie d'énergie : ${if (runtimeSnapshot.powerSaveMode) "activée" else "désactivée"}")
+                Text(if (runtimeSnapshot.lowRamDevice) "Android identifie cet appareil comme ayant peu de mémoire." else "Android ne classe pas cet appareil comme appareil à faible mémoire.")
+                Text("Mesure ponctuelle : la consommation réelle de batterie doit être mesurée sur une durée d'utilisation et ne peut pas être déduite de ce relevé.", style = MaterialTheme.typography.bodySmall)
+            }
+        }
 
         Card(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
