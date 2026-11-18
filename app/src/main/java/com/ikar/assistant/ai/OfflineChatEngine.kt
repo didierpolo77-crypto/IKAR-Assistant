@@ -10,6 +10,20 @@ object OfflineChatEngine {
         val normalized = normalize(question.trim())
         if (normalized.isBlank()) return "Écris une question pour commencer."
 
+        if (ConversationContextBuilder.isFollowUp(question)) {
+            val recent = ConversationContextBuilder.recentMessages(question, memories)
+            if (recent.isNotEmpty()) {
+                val transcript = recent.joinToString("\\n\\n") { entry ->
+                    val speaker = if (entry.type == "USER_MESSAGE") "Toi" else "IKAR"
+                    "$speaker : ${entry.content.trim().take(500)}"
+                }
+                return "Je reprends le fil à partir des messages récents enregistrés localement :\\n\\n" +
+                    transcript +
+                    "\\n\\nJe m'appuie sur ces messages tels qu'ils ont été enregistrés ; ils ne constituent pas une vérification indépendante des faits. " +
+                    "Dis-moi quelle partie tu veux approfondir ou quelle étape je dois poursuivre."
+            }
+        }
+
         IkarDecisionEngine.evaluate(question)?.let { decision ->
             return "Analyse IKAR — ${decision.topic} (${decision.confidence})\n\n${decision.response}\n\nJe me base sur les mots de ta demande, pas sur une inspection automatique de ton téléphone."
         }
