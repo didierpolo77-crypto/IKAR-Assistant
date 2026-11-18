@@ -5,6 +5,15 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Bundle
+import android.speech.RecognitionListener
+import android.speech.RecognizerIntent
+import android.speech.SpeechRecognizer
+import android.speech.tts.TextToSpeech
+import android.Manifest
+import androidx.core.content.ContextCompat
+import java.util.Locale
 import android.graphics.Color
 import android.graphics.PixelFormat
 import android.graphics.drawable.GradientDrawable
@@ -45,11 +54,18 @@ class FloatingAssistantService : Service() {
     private var panelParams: WindowManager.LayoutParams? = null
     private lateinit var params: WindowManager.LayoutParams
     private val channelId = "ikar_floating_assistant"
+    private var speechOutput: TextToSpeech? = null
+    private var speechOutputReady = false
+    private var speechRecognizer: SpeechRecognizer? = null
 
     override fun onCreate() {
         super.onCreate()
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
         createChannel()
+        speechOutput = TextToSpeech(this) { status ->
+            speechOutputReady = status == TextToSpeech.SUCCESS &&
+                (speechOutput?.setLanguage(Locale.FRANCE) ?: TextToSpeech.LANG_MISSING_DATA) >= TextToSpeech.LANG_AVAILABLE
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -182,6 +198,10 @@ class FloatingAssistantService : Service() {
             maxLines = 3
         }
         root.addView(input, LinearLayout.LayoutParams(-1, dp(54)))
+        val voice = Button(this).apply { text = "🎙 Parler à IKAR" }
+        root.addView(voice, LinearLayout.LayoutParams(-1, dp(48)))
+        voice.setOnClickListener { startVoiceRecognition(input, transcript, scroll) }
+
         val send = Button(this).apply { text = "Envoyer" }
         root.addView(send, LinearLayout.LayoutParams(-1, dp(48)))
         send.setOnClickListener {
@@ -199,6 +219,7 @@ class FloatingAssistantService : Service() {
                         answer
                     }
                     transcript.append("$reply\n")
+                    if (speechOutputReady) speechOutput?.speak(reply.take(2500), TextToSpeech.QUEUE_FLUSH, null, "ikar-floating-reply")
                     scroll.post { scroll.fullScroll(View.FOCUS_DOWN) }
                 }
             }
@@ -219,6 +240,68 @@ class FloatingAssistantService : Service() {
         windowManager.addView(root, p)
     }
 
+
+    private fun startVoiceRecognition(input: EditText, transcript: TextView, scroll: ScrollView) {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            transcript.append("\nIKAR : autorise d'abord le microphone depuis l'application principale.\n")
+            scroll.post { scroll.fullScroll(View.FOCUS_DOWN) }
+            return
+        }
+        if (!SpeechRecognizer.isRecognitionAvailable(this)) {
+            transcript.append("\nIKAR : aucun service de reconnaissance vocale n'est disponible.\n")
+            return
+        }
+        try {
+            val recognizer = if (Build.VERSION.SDK_INT >= 31 && SpeechRecognizer.isOnDeviceRecognitionAvailable(this)) {
+                SpeechRecognizer.createOnDeviceSpeechRecognizer(this)
+            } else {
+                SpeechRecognizer.createSpeechRecognizer(this)
+            }
+            speechRecognizer?.destroy()
+            speechRecognizer = recognizer
+            recognizer.setRecognitionListener(object : RecognitionListener {
+                override fun onReadyForSpeech(params: Bundle?) {
+                    transcript.append("\nIKAR : je t'écoute…\n")
+                    scroll.post { scroll.fullScroll(View.FOCUS_DOWN) }
+                }
+                override fun onBeginningOfSpeech() {}
+                override fun onRmsChanged(rmsdB: Float) {}
+                override fun onBufferReceived(buffer: ByteArray?) {}
+                override fun onEndOfSpeech() {}
+                override fun onError(error: Int) {
+                    transcript.append("IKAR : reconnaissance vocale impossible (code $error).\n")
+                    speechRecognizer?.destroy()
+                    speechRecognizer = null
+                    scroll.post { scroll.fullScroll(View.FOCUS_DOWN) }
+                }
+                override fun onResults(results: Bundle?) {
+                    val spoken = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull().orEmpty()
+                    if (spoken.isNotBlank()) {
+                        input.setText(spoken)
+                        input.setSelection(input.text.length)
+                        transcript.append("IKAR : j'ai compris : $spoken\nAppuie sur Envoyer pour confirmer.\n")
+                    } else {
+                        transcript.append("IKAR : je n'ai pas compris. Réessaie.\n")
+                    }
+                    speechRecognizer?.destroy()
+                    speechRecognizer = null
+                    scroll.post { scroll.fullScroll(View.FOCUS_DOWN) }
+                }
+                override fun onPartialResults(partialResults: Bundle?) {}
+                override fun onEvent(eventType: Int, params: Bundle?) {}
+            })
+            val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE, "fr-FR")
+                putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
+                putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false)
+            }
+            recognizer.startListening(intent)
+        } catch (error: Exception) {
+            transcript.append("IKAR : impossible de démarrer le microphone.\n")
+        }
+    }
+
     private fun hidePanel() {
         panel?.let { runCatching { windowManager.removeView(it) } }
         panel = null
@@ -231,6 +314,11 @@ class FloatingAssistantService : Service() {
         hidePanel()
         bubble?.let { runCatching { windowManager.removeView(it) } }
         bubble = null
+        speechRecognizer?.destroy()
+        speechRecognizer = null
+        speechOutput?.stop()
+        speechOutput?.shutdown()
+        speechOutput = null
         serviceScope.cancel()
         super.onDestroy()
     }
