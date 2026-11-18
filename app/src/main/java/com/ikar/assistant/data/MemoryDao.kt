@@ -24,7 +24,7 @@ interface MemoryDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun savePendingAction(action: PendingActionEntity)
 
-    @Query("SELECT * FROM pending_actions WHERE status IN ('PENDING', 'CONFIRMED') ORDER BY createdAt DESC")
+    @Query("SELECT * FROM pending_actions WHERE status = 'PENDING' ORDER BY createdAt DESC")
     suspend fun getOpenPendingActions(): List<PendingActionEntity>
 
     @Query("SELECT * FROM pending_actions WHERE id = :id LIMIT 1")
