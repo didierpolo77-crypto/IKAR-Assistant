@@ -8,6 +8,7 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -41,6 +42,15 @@ import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 private const val CHANNEL_ID = "ikar_general"
 
 class MainActivity : ComponentActivity() {
+    private val notificationPermissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            if (granted) {
+                showLocalNotification()
+            } else {
+                Toast.makeText(this, "Autorise les notifications pour recevoir les alertes IKAR.", Toast.LENGTH_LONG).show()
+            }
+        }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         createNotificationChannel()
@@ -51,7 +61,7 @@ class MainActivity : ComponentActivity() {
                         onPickImage = { uri, onResult ->
                             recognizeText(uri, onResult)
                         },
-                        onNotify = { showLocalNotification() }
+                        onNotify = { requestNotificationPermissionOrNotify() }
                     )
                 }
             }
@@ -84,6 +94,16 @@ class MainActivity : ComponentActivity() {
                 }
         } catch (error: Exception) {
             onResult("Impossible d'ouvrir l'image : ${error.localizedMessage ?: "erreur"}")
+        }
+    }
+
+    private fun requestNotificationPermissionOrNotify() {
+        if (Build.VERSION.SDK_INT >= 33 &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        } else {
+            showLocalNotification()
         }
     }
 
