@@ -3,7 +3,6 @@ package com.ikar.assistant
 import android.Manifest
 import android.app.NotificationChannel
 import android.app.NotificationManager
-import android.content.Context
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
@@ -26,18 +25,26 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.Surface
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
+import androidx.room.Room
+import com.ikar.assistant.data.MemoryDatabase
+import com.ikar.assistant.data.MemoryEntry
+import com.ikar.assistant.data.MemoryDao
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 private const val CHANNEL_ID = "ikar_general"
 
@@ -54,13 +61,13 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         createNotificationChannel()
+        val memoryDao = MemoryDatabase.getInstance(applicationContext).memoryDao()
         setContent {
             MaterialTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     IkarHome(
-                        onPickImage = { uri, onResult ->
-                            recognizeText(uri, onResult)
-                        },
+                        memoryDao = memoryDao,
+                        onPickImage = { uri, onResult -> recognizeText(uri, onResult) },
                         onNotify = { requestNotificationPermissionOrNotify() }
                     )
                 }
@@ -125,18 +132,53 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 private fun IkarHome(
+    memoryDao: MemoryDao,
     onPickImage: (Uri, (String) -> Unit) -> Unit,
     onNotify: () -> Unit
 ) {
     var recognizedText by remember { mutableStateOf("Le texte extrait de l'image apparaîtra ici.") }
     var processing by remember { mutableStateOf(false) }
     var connectedMode by remember { mutableStateOf(false) }
+    var noteText by remember { mutableStateOf("") }
+    var memories by remember { mutableStateOf<List<MemoryEntry>>(emptyList()) }
+    var memoryError by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+
+    suspend fun refreshMemories() {
+        memories = withContext(Dispatchers.IO) { memoryDao.getAll() }
+    }
+
+    LaunchedEffect(memoryDao) {
+        try {
+            refreshMemories()
+        } catch (error: Exception) {
+            memoryError = "Impossible de charger la mémoire locale."
+        }
+    }
+
     val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri != null) {
             processing = true
             onPickImage(uri) { text ->
                 recognizedText = text
                 processing = false
+                if (text.isNotBlank() &&
+                    !text.startsWith("Échec de la lecture") &&
+                    !text.startsWith("Impossible d'ouvrir") &&
+                    text != "Aucun texte détecté dans cette image."
+                ) {
+                    scope.launch {
+                        try {
+                            withContext(Dispatchers.IO) {
+                                memoryDao.insert(MemoryEntry(type = "OCR", content = text))
+                            }
+                            refreshMemories()
+                            memoryError = null
+                        } catch (error: Exception) {
+                            memoryError = "Le texte a été lu, mais n'a pas pu être mémorisé."
+                        }
+                    }
+                }
             }
         }
     }
@@ -146,17 +188,88 @@ private fun IkarHome(
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         Text("IKAR Assistant", style = MaterialTheme.typography.headlineMedium)
-        Text("Assistant Android — première version", style = MaterialTheme.typography.bodyMedium)
+        Text("Assistant Android — mémoire locale V2", style = MaterialTheme.typography.bodyMedium)
+
+        Card(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Mémoire personnelle hors connexion", style = MaterialTheme.typography.titleMedium)
+                Text("Enregistre ici des notes que tu souhaites qu'IKAR puisse retrouver plus tard. Elles restent dans le stockage privé de cette application.")
+                OutlinedTextField(
+                    value = noteText,
+                    onValueChange = { noteText = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Écrire une note à mémoriser") },
+                    minLines = 2
+                )
+                Button(
+                    onClick = {
+                        val value = noteText.trim()
+                        if (value.isNotEmpty()) {
+                            scope.launch {
+                                try {
+                                    withContext(Dispatchers.IO) {
+                                        memoryDao.insert(MemoryEntry(type = "NOTE", content = value))
+                                    }
+                                    noteText = ""
+                                    refreshMemories()
+                                    memoryError = null
+                                } catch (error: Exception) {
+                                    memoryError = "Impossible d'enregistrer cette note."
+                                }
+                            }
+                        }
+                    },
+                    enabled = noteText.isNotBlank(),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Enregistrer dans ma mémoire")
+                }
+                Text("${memories.size} élément(s) enregistré(s)", style = MaterialTheme.typography.labelMedium)
+                memoryError?.let {
+                    Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                }
+                memories.forEach { entry ->
+                    Card(Modifier.fillMaxWidth()) {
+                        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text(
+                                if (entry.type == "OCR") "Texte extrait d'une image" else "Note personnelle",
+                                style = MaterialTheme.typography.labelLarge
+                            )
+                            Text(entry.content, style = MaterialTheme.typography.bodyMedium)
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                                Button(onClick = {
+                                    scope.launch {
+                                        try {
+                                            withContext(Dispatchers.IO) { memoryDao.delete(entry) }
+                                            refreshMemories()
+                                        } catch (error: Exception) {
+                                            memoryError = "Impossible de supprimer cet élément."
+                                        }
+                                    }
+                                }) {
+                                    Text("Supprimer")
+                                }
+                            }
+                        }
+                    }
+                }
+                if (memories.isEmpty()) {
+                    Text("Ta mémoire est encore vide.", style = MaterialTheme.typography.bodySmall)
+                }
+            }
+        }
+
         Card(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Lecture de texte hors connexion", style = MaterialTheme.typography.titleMedium)
-                Text("Sélectionne une image. IKAR en extrait le texte directement sur le téléphone avec le moteur OCR local.")
+                Text("Sélectionne une image. IKAR en extrait le texte sur le téléphone et l'ajoute à ta mémoire.")
                 Button(onClick = { imagePicker.launch("image/*") }, enabled = !processing) {
                     Text(if (processing) "Lecture en cours…" else "Choisir une image")
                 }
                 Text(recognizedText, style = MaterialTheme.typography.bodyMedium)
             }
         }
+
         Card(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Mode de fonctionnement", style = MaterialTheme.typography.titleMedium)
@@ -169,17 +282,18 @@ private fun IkarHome(
                 }
                 Text(
                     if (connectedMode) "Mode connecté sélectionné, mais aucune requête serveur n'est envoyée tant que le backend n'est pas configuré."
-                    else "Mode hors connexion : l'OCR local reste disponible.",
+                    else "Mode hors connexion : la mémoire et l'OCR local restent disponibles.",
                     style = MaterialTheme.typography.bodySmall
                 )
             }
         }
+
         Button(onClick = onNotify, modifier = Modifier.fillMaxWidth()) {
             Text("Envoyer une notification de test")
         }
         Spacer(Modifier.height(8.dp))
         Text(
-            "Confidentialité : l'image choisie est traitée localement par l'OCR. Cette version ne surveille pas l'écran et n'agit pas dans d'autres applications.",
+            "Confidentialité : les notes et les textes extraits sont conservés dans la base locale privée de l'application. Ils ne sont pas envoyés à un serveur.",
             style = MaterialTheme.typography.bodySmall
         )
     }
