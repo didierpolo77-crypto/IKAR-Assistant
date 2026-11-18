@@ -65,6 +65,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.ikar.assistant.security.FolderAuditScheduler
+import com.ikar.assistant.diagnostics.BatteryTestPanel
 import com.ikar.assistant.diagnostics.RuntimeDiagnostics
 
 private const val CHANNEL_ID = "ikar_general"
@@ -478,6 +479,8 @@ private fun IkarHome(
                 Text("Mesure ponctuelle : la consommation réelle de batterie doit être mesurée sur une durée d'utilisation et ne peut pas être déduite de ce relevé.", style = MaterialTheme.typography.bodySmall)
             }
         }
+
+        BatteryTestPanel()
 
         Card(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
