@@ -50,6 +50,8 @@ import com.ikar.assistant.data.MemoryDao
 import com.ikar.assistant.ai.OfflineChatEngine
 import com.ikar.assistant.security.SpywareScanner
 import com.ikar.assistant.security.SecurityReport
+import com.ikar.assistant.security.FileScanner
+import com.ikar.assistant.security.FileScanReport
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
@@ -201,6 +203,8 @@ private fun IkarHome(
     var memoryError by remember { mutableStateOf<String?>(null) }
     var securityReport by remember { mutableStateOf<SecurityReport?>(null) }
     var securityScanRunning by remember { mutableStateOf(false) }
+    var fileScanReport by remember { mutableStateOf<FileScanReport?>(null) }
+    var fileScanRunning by remember { mutableStateOf(false) }
 
     DisposableEffect(Unit) {
         onDispose {
@@ -307,6 +311,24 @@ private fun IkarHome(
         }
     }
 
+    val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null && !fileScanRunning) {
+            fileScanRunning = true
+            fileScanReport = null
+            scope.launch {
+                try {
+                    fileScanReport = withContext(Dispatchers.IO) {
+                        FileScanner.scan(context.applicationContext, uri)
+                    }
+                } catch (error: Exception) {
+                    memoryError = "Analyse du fichier impossible : ${error.localizedMessage ?: "erreur inconnue"}"
+                } finally {
+                    fileScanRunning = false
+                }
+            }
+        }
+    }
+
     Column(
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
@@ -363,6 +385,33 @@ private fun IkarHome(
                     }
                     Text("Vérifie l'identité de l'application dans Android avant de retirer un accès ou de la désinstaller. IKAR ne supprime rien automatiquement.", style = MaterialTheme.typography.bodySmall)
                 } ?: Text("Aucune analyse effectuée pour le moment.", style = MaterialTheme.typography.bodySmall)
+            }
+        }
+
+        Card(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Antivirus local — fichiers et APK", style = MaterialTheme.typography.titleLarge)
+                Text("Sélectionne toi-même un fichier ou un APK. IKAR calcule son empreinte SHA-256 et inspecte localement le manifeste des APK, sans envoyer le fichier sur Internet.")
+                Button(
+                    onClick = { filePicker.launch(arrayOf("*/*")) },
+                    enabled = !fileScanRunning,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(if (fileScanRunning) "Analyse en cours…" else "Choisir un fichier à analyser")
+                }
+                fileScanReport?.let { report ->
+                    Text(report.verdict, style = MaterialTheme.typography.titleMedium)
+                    Text("Fichier : ${report.fileName}")
+                    Text("Taille : ${report.sizeBytes / 1024} Ko · SHA-256 :", style = MaterialTheme.typography.bodySmall)
+                    Text(report.sha256, style = MaterialTheme.typography.bodySmall)
+                    if (report.packageName != null) Text("Paquet APK : ${report.packageName}")
+                    if (report.indicators.isEmpty()) {
+                        Text("Aucun indicateur détecté par les règles locales actuelles.")
+                    } else {
+                        report.indicators.forEach { Text("• $it", style = MaterialTheme.typography.bodySmall) }
+                    }
+                    Text("Cette version ne compare pas encore l'empreinte à une base de signatures de malwares et n'exécute pas YARA/ClamAV. Un résultat rassurant ne garantit donc pas que le fichier est sûr.", style = MaterialTheme.typography.bodySmall)
+                } ?: Text("Aucun fichier analysé pour le moment.", style = MaterialTheme.typography.bodySmall)
             }
         }
 
