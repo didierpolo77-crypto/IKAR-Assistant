@@ -5,6 +5,10 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.content.Intent
+import android.provider.Settings
+import android.speech.tts.TextToSpeech
+import java.util.Locale
 import android.os.Build
 import android.os.Bundle
 import android.widget.Toast
@@ -50,6 +54,9 @@ import kotlinx.coroutines.withContext
 private const val CHANNEL_ID = "ikar_general"
 
 class MainActivity : ComponentActivity() {
+    private var speechOutput: TextToSpeech? = null
+    private var speechOutputReady = false
+
     private val notificationPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
             if (granted) {
@@ -62,6 +69,10 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         createNotificationChannel()
+        speechOutput = TextToSpeech(this) { status ->
+            speechOutputReady = status == TextToSpeech.SUCCESS &&
+                (speechOutput?.setLanguage(Locale.FRANCE) ?: TextToSpeech.LANG_MISSING_DATA) >= TextToSpeech.LANG_AVAILABLE
+        }
         val memoryDao = MemoryDatabase.getInstance(applicationContext).memoryDao()
         setContent {
             MaterialTheme {
@@ -69,11 +80,39 @@ class MainActivity : ComponentActivity() {
                     IkarHome(
                         memoryDao = memoryDao,
                         onPickImage = { uri, onResult -> recognizeText(uri, onResult) },
-                        onNotify = { requestNotificationPermissionOrNotify() }
+                        onNotify = { requestNotificationPermissionOrNotify() },
+                        onSpeak = { speakReply(it) },
+                        onEnableBubble = { enableFloatingBubble() },
+                        onDisableBubble = { stopService(Intent(this, FloatingAssistantService::class.java)) }
                     )
                 }
             }
         }
+    }
+
+    private fun speakReply(message: String) {
+        if (speechOutputReady) {
+            speechOutput?.speak(message.take(3500), TextToSpeech.QUEUE_FLUSH, null, "ikar-reply")
+        } else {
+            Toast.makeText(this, "La voix française n'est pas prête. Vérifie les données vocales dans Android.", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private fun enableFloatingBubble() {
+        if (!Settings.canDrawOverlays(this)) {
+            Toast.makeText(this, "Autorise l'affichage par-dessus les autres applications, puis reviens appuyer sur ce bouton.", Toast.LENGTH_LONG).show()
+            startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
+            return
+        }
+        ContextCompat.startForegroundService(this, Intent(this, FloatingAssistantService::class.java))
+        Toast.makeText(this, "Bulle IKAR activée.", Toast.LENGTH_SHORT).show()
+    }
+
+    override fun onDestroy() {
+        speechOutput?.stop()
+        speechOutput?.shutdown()
+        speechOutput = null
+        super.onDestroy()
     }
 
     private fun createNotificationChannel() {
@@ -135,7 +174,10 @@ class MainActivity : ComponentActivity() {
 private fun IkarHome(
     memoryDao: MemoryDao,
     onPickImage: (Uri, (String) -> Unit) -> Unit,
-    onNotify: () -> Unit
+    onNotify: () -> Unit,
+    onSpeak: (String) -> Unit,
+    onEnableBubble: () -> Unit,
+    onDisableBubble: () -> Unit
 ) {
     var recognizedText by remember { mutableStateOf("Le texte extrait de l'image apparaîtra ici.") }
     var processing by remember { mutableStateOf(false) }
