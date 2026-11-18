@@ -54,6 +54,7 @@ import com.ikar.assistant.security.SecurityReport
 import com.ikar.assistant.security.FileScanner
 import com.ikar.assistant.security.FileScanReport
 import com.ikar.assistant.security.SecurityCenter
+import com.ikar.assistant.security.ActionAudit
 import com.ikar.assistant.security.FolderRiskReport
 import com.ikar.assistant.security.LinkRiskReport
 import com.google.mlkit.vision.common.InputImage
@@ -514,7 +515,7 @@ private fun IkarHome(
                     }
                     scope.launch {
                         withContext(Dispatchers.IO) {
-                            memoryDao.insert(MemoryEntry(type = "SECURITY_EVENT", content = "Vérification lien : ${report.url} — " + if (report.suspicious) "signaux suspects : ${report.reasons.joinToString()}" else "aucun signal heuristique"))
+                            memoryDao.insert(MemoryEntry(type = "SECURITY_EVENT", content = "Vérification lien : " + (runCatching { java.net.URI(report.url).host }.getOrNull() ?: "hôte non reconnu") + " — " + if (report.suspicious) "signaux suspects : ${report.reasons.joinToString()}" else "aucun signal heuristique"))
                         }
                         refreshMemories()
                     }
@@ -542,7 +543,11 @@ private fun IkarHome(
                         } else {
                             window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
                         }
-                        scope.launch { withContext(Dispatchers.IO) { memoryDao.insert(MemoryEntry(type = "SECURITY_EVENT", content = if (enabled) "Mode urgence activé : écran protégé et bulle arrêtée." else "Mode urgence désactivé.")) }; refreshMemories() }
+                        scope.launch { withContext(Dispatchers.IO) {
+                            val status = if (enabled) "activé" else "désactivé"
+                            memoryDao.insert(MemoryEntry(type = "SECURITY_EVENT", content = "Mode urgence $status : écran protégé et bulle arrêtée."))
+                            ActionAudit.record(memoryDao, "emergency_mode", status, "Action déclenchée depuis le commutateur IKAR.")
+                        }; refreshMemories() }
                     })
                 }
                 Divider()
