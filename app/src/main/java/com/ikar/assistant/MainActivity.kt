@@ -54,6 +54,7 @@ import com.ikar.assistant.security.SecurityReport
 import com.ikar.assistant.security.FileScanner
 import com.ikar.assistant.security.FileScanReport
 import com.ikar.assistant.security.SecurityCenter
+import com.ikar.assistant.security.PendingActionCenter
 import com.ikar.assistant.security.ActionAudit
 import com.ikar.assistant.security.FolderRiskReport
 import com.ikar.assistant.security.LinkRiskReport
@@ -382,6 +383,7 @@ private fun IkarHome(
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
+        PendingActionCenter(memoryDao = memoryDao)
         Text("IKAR Assistant", style = MaterialTheme.typography.headlineMedium)
         Text("Assistant Android — mémoire locale V2", style = MaterialTheme.typography.bodyMedium)
 
