@@ -72,7 +72,7 @@ object SpywareScanner {
             } catch (_: Exception) { null }
 
             val requested = packageInfo?.requestedPermissions.orEmpty().toSet()
-            val permissionFlags = packageInfo?.requestedPermissionsFlags.orEmpty()
+            val permissionFlags = packageInfo?.requestedPermissionsFlags ?: intArrayOf()
             val reasons = mutableListOf<String>()
             var score = 0
 
@@ -80,7 +80,7 @@ object SpywareScanner {
                 if (permission in requested) {
                     val index = packageInfo?.requestedPermissions?.indexOf(permission) ?: -1
                     val granted = index >= 0 && ((permissionFlags.getOrNull(index) ?: 0)
-                        and PackageManager.REQUESTED_PERMISSION_GRANTED) != 0
+                        and android.content.pm.PackageInfo.REQUESTED_PERMISSION_GRANTED) != 0
                     reasons += if (granted) "${rule.label} — autorisation accordée" else rule.label
                     score += rule.weight + if (granted) 1 else 0
                 }
