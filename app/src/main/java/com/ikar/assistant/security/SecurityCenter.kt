@@ -40,7 +40,7 @@ object SecurityCenter {
         if (!parsed.scheme.equals("https", true)) reasons += "Connexion HTTP non chiffrée."
         if (host != asciiHost || unicodeHost != host) reasons += "Nom de domaine avec caractères internationalisés : vérifie chaque caractère."
         if (asciiHost.startsWith("xn--") || asciiHost.contains(".xn--")) reasons += "Nom de domaine punycode pouvant masquer des caractères ressemblants."
-        if (asciiHost.matches(Regex("""^\\d{1,3}(\\.\\d{1,3}){3}$"""))) reasons += "Lien utilisant directement une adresse IP."
+        if (asciiHost.matches(Regex("""^\d{1,3}(\.\d{1,3}){3}$"""))) reasons += "Lien utilisant directement une adresse IP."
         if (asciiHost.count { it == '.' } >= 4) reasons += "Sous-domaines particulièrement nombreux."
         if (parsed.userInfo != null) reasons += "Le lien contient des informations avant le nom de domaine : technique parfois utilisée pour tromper."
         if (asciiHost in setOf("bit.ly", "tinyurl.com", "t.co", "is.gd", "cutt.ly", "rb.gy", "tiny.cc")) {
