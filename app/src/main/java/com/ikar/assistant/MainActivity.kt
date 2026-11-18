@@ -338,6 +338,9 @@ private fun IkarHome(
                 try {
                     val report = withContext(Dispatchers.IO) { SecurityCenter.auditFolder(context.applicationContext, uri) }
                     folderReport = report
+                    if (speakReplies && (report.changed >= 20 || report.suspiciousNames.isNotEmpty())) {
+                        onSpeak("Alerte de sécurité IKAR. ${report.message} ${report.changed} changements relevés.")
+                    }
                     withContext(Dispatchers.IO) { memoryDao.insert(MemoryEntry(type = "SECURITY_EVENT", content = "Anti-ransomware — ${report.message} Fichiers examinés : ${report.inspected}, changements : ${report.changed}.")) }
                     refreshMemories()
                 } catch (error: Exception) { memoryError = "Audit du dossier impossible : ${error.localizedMessage ?: "erreur inconnue"}" }
@@ -356,6 +359,9 @@ private fun IkarHome(
                         FileScanner.scan(context.applicationContext, uri)
                     }
                     fileScanReport = report
+                    if (speakReplies && report.indicators.isNotEmpty()) {
+                        onSpeak("Analyse IKAR terminée. ${report.verdict}. ${report.indicators.take(2).joinToString(". ")}")
+                    }
                     withContext(Dispatchers.IO) {
                         memoryDao.insert(MemoryEntry(type = "SECURITY_EVENT", content = "Analyse fichier : ${report.fileName} — ${report.verdict} — SHA-256 ${report.sha256}"))
                     }
@@ -503,6 +509,9 @@ private fun IkarHome(
                 Button(onClick = {
                     val report = SecurityCenter.checkLink(linkInput)
                     linkReport = report
+                    if (speakReplies && report.suspicious) {
+                        onSpeak("Attention. IKAR a relevé des indices suspects dans ce lien. Ne l'ouvre pas avant vérification. ${report.reasons.take(2).joinToString(". ")}")
+                    }
                     scope.launch {
                         withContext(Dispatchers.IO) {
                             memoryDao.insert(MemoryEntry(type = "SECURITY_EVENT", content = "Vérification lien : ${report.url} — " + if (report.suspicious) "signaux suspects : ${report.reasons.joinToString()}" else "aucun signal heuristique"))
