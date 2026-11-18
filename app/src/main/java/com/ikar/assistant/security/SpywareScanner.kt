@@ -1,9 +1,11 @@
 package com.ikar.assistant.security
 
+import android.Manifest
+import android.app.admin.DevicePolicyManager
 import android.content.Context
+import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.provider.Settings
-import android.text.TextUtils
 import java.util.Locale
 
 data class AppRisk(
@@ -17,61 +19,102 @@ data class AppRisk(
 data class SecurityReport(
     val scannedCount: Int,
     val findings: List<AppRisk>,
-    val enabledAccessibilityPackages: List<String>
+    val enabledAccessibilityPackages: List<String>,
+    val enabledNotificationListenerPackages: List<String>,
+    val activeDeviceAdminPackages: List<String>
 )
 
 object SpywareScanner {
+    private data class PermissionRule(val label: String, val weight: Int)
+
     private val sensitivePermissions = mapOf(
-        "android.permission.RECORD_AUDIO" to "Accès au microphone",
-        "android.permission.CAMERA" to "Accès à la caméra",
-        "android.permission.ACCESS_FINE_LOCATION" to "Localisation précise",
-        "android.permission.ACCESS_BACKGROUND_LOCATION" to "Localisation en arrière-plan",
-        "android.permission.READ_SMS" to "Lecture des SMS",
-        "android.permission.RECEIVE_SMS" to "Réception des SMS",
-        "android.permission.SEND_SMS" to "Envoi de SMS",
-        "android.permission.READ_CALL_LOG" to "Lecture du journal d'appels",
-        "android.permission.READ_CONTACTS" to "Lecture des contacts",
-        "android.permission.READ_PHONE_STATE" to "Informations téléphoniques"
+        Manifest.permission.RECORD_AUDIO to PermissionRule("Microphone demandé", 2),
+        Manifest.permission.CAMERA to PermissionRule("Caméra demandée", 2),
+        Manifest.permission.ACCESS_FINE_LOCATION to PermissionRule("Localisation précise demandée", 1),
+        Manifest.permission.ACCESS_BACKGROUND_LOCATION to PermissionRule("Localisation en arrière-plan demandée", 2),
+        Manifest.permission.READ_SMS to PermissionRule("Lecture des SMS demandée", 2),
+        Manifest.permission.RECEIVE_SMS to PermissionRule("Réception des SMS demandée", 1),
+        Manifest.permission.SEND_SMS to PermissionRule("Envoi de SMS demandé", 2),
+        Manifest.permission.READ_CALL_LOG to PermissionRule("Lecture du journal d'appels demandée", 2),
+        Manifest.permission.READ_CONTACTS to PermissionRule("Lecture des contacts demandée", 1),
+        Manifest.permission.READ_PHONE_STATE to PermissionRule("Accès à l'état du téléphone demandé", 1),
+        Manifest.permission.READ_EXTERNAL_STORAGE to PermissionRule("Lecture du stockage partagé demandée", 1),
+        Manifest.permission.WRITE_EXTERNAL_STORAGE to PermissionRule("Écriture dans le stockage partagé demandée", 1)
     )
 
     @Suppress("DEPRECATION")
     fun scan(context: Context): SecurityReport {
         val pm = context.packageManager
-        val accessibility = Settings.Secure.getString(
+        val accessibilityPackages = Settings.Secure.getString(
             context.contentResolver,
             Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
         ).orEmpty().split(':').mapNotNull { component ->
             component.substringBefore('/').takeIf { it.isNotBlank() }
         }.toSet()
 
+        val notificationListenerPackages = Settings.Secure.getString(
+            context.contentResolver,
+            "enabled_notification_listeners"
+        ).orEmpty().split(':').mapNotNull { component ->
+            component.substringBefore('/').takeIf { it.isNotBlank() }
+        }.toSet()
+
+        val deviceAdminPackages = try {
+            val dpm = context.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
+            dpm.activeAdmins.orEmpty().map { it.packageName }.toSet()
+        } catch (_: Exception) { emptySet() }
+
         val apps = pm.getInstalledApplications(PackageManager.GET_META_DATA)
         val findings = apps.mapNotNull { app ->
             if (app.packageName == context.packageName) return@mapNotNull null
-            val isSystem = (app.flags and android.content.pm.ApplicationInfo.FLAG_SYSTEM) != 0
-            val requested = try {
-                val info = pm.getPackageInfo(app.packageName, PackageManager.GET_PERMISSIONS)
-                info.requestedPermissions?.toSet().orEmpty()
-            } catch (_: Exception) { emptySet() }
+            val isSystem = (app.flags and ApplicationInfo.FLAG_SYSTEM) != 0
+            val packageInfo = try {
+                pm.getPackageInfo(app.packageName, PackageManager.GET_PERMISSIONS)
+            } catch (_: Exception) { null }
 
+            val requested = packageInfo?.requestedPermissions.orEmpty().toSet()
+            val permissionFlags = packageInfo?.requestedPermissionsFlags.orEmpty()
             val reasons = mutableListOf<String>()
             var score = 0
-            sensitivePermissions.forEach { (permission, description) ->
+
+            sensitivePermissions.forEach { (permission, rule) ->
                 if (permission in requested) {
-                    reasons += description
-                    score += when (permission) {
-                        "android.permission.RECORD_AUDIO", "android.permission.CAMERA",
-                        "android.permission.ACCESS_BACKGROUND_LOCATION", "android.permission.SEND_SMS",
-                        "android.permission.READ_SMS", "android.permission.READ_CALL_LOG" -> 2
-                        else -> 1
-                    }
+                    val index = packageInfo?.requestedPermissions?.indexOf(permission) ?: -1
+                    val granted = index >= 0 && permissionFlags.getOrNull(index)
+                        ?.and(PackageManager.REQUESTED_PERMISSION_GRANTED) != 0
+                    reasons += if (granted) "${rule.label} — autorisation accordée" else rule.label
+                    score += rule.weight + if (granted) 1 else 0
                 }
             }
-            if (app.packageName in accessibility) {
-                reasons += "Service d'accessibilité activé : vérification conseillée"
+
+            if (app.packageName in accessibilityPackages) {
+                reasons += "Service d'accessibilité activé — accès potentiellement étendu"
+                score += 5
+            }
+            if (app.packageName in notificationListenerPackages) {
+                reasons += "Accès aux notifications activé"
+                score += 3
+            }
+            if (app.packageName in deviceAdminPackages) {
+                reasons += "Administrateur de l'appareil actif"
                 score += 4
             }
-            // System applications are reported only when a high-risk accessibility service is enabled.
-            if (isSystem && app.packageName !in accessibility) return@mapNotNull null
+
+            val installer = try { pm.getInstallerPackageName(app.packageName) } catch (_: Exception) { null }
+            if (installer == null && !isSystem) {
+                reasons += "Source d'installation non identifiée — vérifier l'origine"
+                score += 1
+            }
+            if ((app.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0) {
+                reasons += "Application marquée comme déboguable"
+                score += 2
+            }
+
+            // Keep ordinary system apps out of the list unless a privileged access is enabled.
+            val privilegedAccess = app.packageName in accessibilityPackages ||
+                app.packageName in notificationListenerPackages ||
+                app.packageName in deviceAdminPackages
+            if (isSystem && !privilegedAccess) return@mapNotNull null
             if (score < 3) return@mapNotNull null
 
             val label = try { pm.getApplicationLabel(app).toString() }
@@ -79,6 +122,12 @@ object SpywareScanner {
             AppRisk(label, app.packageName, score, reasons.distinct(), isSystem)
         }.sortedByDescending { it.score }
 
-        return SecurityReport(apps.size, findings, accessibility.toList())
+        return SecurityReport(
+            scannedCount = apps.size,
+            findings = findings,
+            enabledAccessibilityPackages = accessibilityPackages.toList().sorted(),
+            enabledNotificationListenerPackages = notificationListenerPackages.toList().sorted(),
+            activeDeviceAdminPackages = deviceAdminPackages.toList().sorted()
+        )
     }
 }
