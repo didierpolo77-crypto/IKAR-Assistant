@@ -13,7 +13,7 @@ object ActionAudit {
     ) {
         val safeAction = actionId.take(80).replace(Regex("[^A-Za-z0-9_.-]"), "_")
         val safeStatus = status.take(40).replace(Regex("[^A-Za-z0-9 _-]"), "")
-        val safeDetail = Regex("""(?i)(password|token|secret|authorization)\\s*[:=]\\s*[^\\s,;]+""")
+        val safeDetail = Regex("""(?i)(password|token|secret|authorization)\s*[:=]\s*[^\s,;]+""")
             .replace(detail) { match -> match.groupValues[1] + "=[masqué]" }
             .take(500)
         dao.insert(
