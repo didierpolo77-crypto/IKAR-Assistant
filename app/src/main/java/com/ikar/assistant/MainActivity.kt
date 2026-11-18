@@ -445,6 +445,7 @@ private fun IkarHome(
                     Text("Taille : ${report.sizeBytes / 1024} Ko · SHA-256 :", style = MaterialTheme.typography.bodySmall)
                     Text(report.sha256, style = MaterialTheme.typography.bodySmall)
                     if (report.packageName != null) Text("Paquet APK : ${report.packageName}")
+                    report.updateAssessment?.let { Text("Compatibilité de mise à jour : $it", style = MaterialTheme.typography.bodySmall) }
                     if (report.indicators.isEmpty()) {
                         Text("Aucun indicateur détecté par les règles locales actuelles.")
                     } else {
