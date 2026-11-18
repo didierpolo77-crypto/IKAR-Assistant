@@ -14,6 +14,11 @@ object OfflineChatEngine {
             return "Analyse IKAR — ${decision.topic} (${decision.confidence})\n\n${decision.response}\n\nJe me base sur les mots de ta demande, pas sur une inspection automatique de ton téléphone."
         }
 
+        IkarAgentCore.respond(question)?.let { reply ->
+            return "IKAR • ${reply.intent} — confiance ${reply.confidence}\n\n${reply.message}" +
+                if (reply.requiresUserChoice) "\n\nJe n'ai encore exécuté aucune action." else ""
+        }
+
         if (isGreeting(normalized)) {
             return "Bonjour ! Je suis IKAR. Je peux retrouver tes notes locales et t'aider à évaluer certaines situations de sécurité. Mon raisonnement hors connexion utilise actuellement des règles explicites, pas encore un grand modèle d'IA."
         }
