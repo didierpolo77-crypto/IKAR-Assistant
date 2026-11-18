@@ -9,7 +9,7 @@ class ActionSafetyPolicyTest {
     @Test fun unknownActionsAreDeniedByDefault() {
         val result = ActionSafetyPolicy.assess("run_shell_command")
         assertEquals(ActionSafetyPolicy.Risk.UNKNOWN, result.risk)
-        assertTrueFalse(result.allowedForAutomaticExecution)
+        assertFalse(result.allowedForAutomaticExecution)
         assertNull(result.undoGuidance)
     }
 
@@ -24,7 +24,4 @@ class ActionSafetyPolicyTest {
         assertFalse(ActionSafetyPolicy.isTrustedAuthorization("web_page"))
         assertFalse(ActionSafetyPolicy.isTrustedAuthorization("ocr"))
         assertFalse(ActionSafetyPolicy.isTrustedAuthorization("model_response"))
-    }
-
-    private fun assertTrueFalse(value: Boolean) = assertFalse(value)
-}
+    }}
