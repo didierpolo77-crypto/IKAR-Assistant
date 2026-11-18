@@ -1,5 +1,6 @@
 package com.ikar.assistant.ai
 
+import com.ikar.assistant.security.ActionSafetyPolicy
 import java.text.Normalizer
 import java.util.Locale
 
@@ -75,10 +76,16 @@ object IkarAgentCore {
         }
 
         if (has(q, "active le mode urgence", "active le mode d urgence", "supprime cette application", "supprime le fichier", "efface mes fichiers", "bloque cette application", "desactive le micro", "désactive le micro", "desactive la camera", "désactive la caméra")) {
+            val actionId = when {
+                has(q, "supprime", "efface") -> "delete_file"
+                has(q, "micro", "camera", "caméra") -> "start_microphone"
+                else -> "change_security_setting"
+            }
+            val policy = ActionSafetyPolicy.assess(actionId)
             return AgentReply(
                 intent = "Action sensible demandée",
                 confidence = "élevée",
-                message = "Cette demande peut modifier les réglages ou les données de l'appareil. Je ne l'exécute pas automatiquement. Je peux d'abord expliquer les conséquences et te guider vers le réglage Android approprié. Toute action disponible doit être confirmée par toi et respecter les autorisations du système.",
+                message = "${policy.explanation} ${policy.undoGuidance.orEmpty()} Je ne lance aucune action depuis cette conversation. Une action disponible devra passer par une interface Android autorisée, avec une confirmation explicite et un résultat inscrit au journal.",
                 requiresUserChoice = true
             )
         }
