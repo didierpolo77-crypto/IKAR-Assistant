@@ -43,12 +43,12 @@ object OfflineChatEngine {
 
         if (ranked.isEmpty()) return "Je n'ai pas trouvé cette information dans ta mémoire locale. Sans connexion, je ne peux pas encore interroger un moteur de connaissances général. Enregistre une note contenant cette information pour que je puisse la retrouver plus tard."
 
-        val excerpts = ranked.joinToString("\\n\\n") { (entry, score) ->
+        val excerpts = ranked.joinToString("\n\n") { (entry, score) ->
             val label = if (entry.type == "OCR") "Texte extrait d'image" else "Note personnelle"
-            "• " + label + " (correspondance : " + score + ") :\\n" + entry.content.trim().take(700)
+            "• " + label + " (correspondance : " + score + ") :\n" + entry.content.trim().take(700)
         }
-        return "Voici ce que j'ai retrouvé dans ta mémoire locale :\\n\\n" + excerpts +
-            "\\n\\nCes résultats proviennent uniquement des données enregistrées sur ce téléphone."
+        return "Voici ce que j'ai retrouvé dans ta mémoire locale :\n\n" + excerpts +
+            "\n\nCes résultats proviennent uniquement des données enregistrées sur ce téléphone."
     }
 
     private fun isGreeting(value: String): Boolean =
