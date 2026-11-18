@@ -15,7 +15,8 @@ data class FileScanReport(
     val packageName: String?,
     val requestedSensitivePermissions: List<String>,
     val indicators: List<String>,
-    val verdict: String
+    val verdict: String,
+    val updateAssessment: String? = null
 )
 
 /**
@@ -111,6 +112,9 @@ object FileScanner {
                 indicators.isNotEmpty() -> "Vérification recommandée"
                 else -> "Aucun indicateur suspect détecté par les règles locales"
             }
+            val updateAssessment = if (isApk && packageName != null) {
+                assessUpdateCompatibility(context, temp.absolutePath, packageName)
+            } else null
 
             return FileScanReport(
                 fileName = name,
@@ -120,10 +124,55 @@ object FileScanner {
                 packageName = packageName,
                 requestedSensitivePermissions = sensitive.distinct(),
                 indicators = indicators,
-                verdict = verdict
+                verdict = verdict,
+                updateAssessment = updateAssessment
             )
         } finally {
             temp.delete()
         }
     }
+    private fun assessUpdateCompatibility(context: Context, apkPath: String, candidatePackage: String): String {
+        if (candidatePackage != context.packageName) {
+            return "Cet APK n'est pas une mise à jour de cette installation IKAR (identifiant de paquet différent)."
+        }
+        return try {
+            val pm = context.packageManager
+            val flags = if (android.os.Build.VERSION.SDK_INT >= 28) PackageManager.GET_SIGNING_CERTIFICATES else PackageManager.GET_SIGNATURES
+            @Suppress("DEPRECATION")
+            val candidate = pm.getPackageArchiveInfo(apkPath, flags)
+                ?: return "Impossible de lire le certificat de signature de cet APK."
+            @Suppress("DEPRECATION")
+            val installed = pm.getPackageInfo(context.packageName, flags)
+
+            fun digests(info: android.content.pm.PackageInfo): Set<String> {
+                val signatures = if (android.os.Build.VERSION.SDK_INT >= 28) {
+                    info.signingInfo?.apkContentsSigners?.toList().orEmpty()
+                } else {
+                    @Suppress("DEPRECATION")
+                    info.signatures?.toList().orEmpty()
+                }
+                return signatures.map { signature ->
+                    MessageDigest.getInstance("SHA-256").digest(signature.toByteArray())
+                        .joinToString("") { "%02x".format(it) }
+                }.toSet()
+            }
+
+            if (digests(candidate).isEmpty() || digests(installed).isEmpty()) {
+                "Signature absente ou illisible : n'installe pas cet APK comme mise à jour."
+            } else if (digests(candidate) != digests(installed)) {
+                "ATTENTION : certificat différent de celui de l'application installée. Android devrait refuser la mise à jour."
+            } else {
+                val candidateVersion = if (android.os.Build.VERSION.SDK_INT >= 28) candidate.longVersionCode else candidate.versionCode.toLong()
+                val installedVersion = if (android.os.Build.VERSION.SDK_INT >= 28) installed.longVersionCode else installed.versionCode.toLong()
+                if (candidateVersion > installedVersion) {
+                    "Signature identique et version plus récente : candidat compatible sur le plan de la signature. Android doit encore confirmer l'installation."
+                } else {
+                    "Signature identique, mais la version APK n'est pas plus récente que celle installée."
+                }
+            }
+        } catch (error: Exception) {
+            "Vérification de signature impossible : " + error.javaClass.simpleName + "."
+        }
+    }
+
 }
