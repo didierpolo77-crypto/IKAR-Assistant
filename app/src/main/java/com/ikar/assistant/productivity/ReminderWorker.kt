@@ -11,6 +11,9 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
+import com.ikar.assistant.data.MemoryDatabase
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 class ReminderWorker(
     appContext: Context,
@@ -18,6 +21,13 @@ class ReminderWorker(
 ) : CoroutineWorker(appContext, params) {
     override suspend fun doWork(): Result {
         val title = inputData.getString("reminder_title")?.take(180) ?: return Result.failure()
+        val reminderId = inputData.getLong("reminder_id", -1L)
+        if (reminderId <= 0L) return Result.failure()
+        val stillOpen = withContext(Dispatchers.IO) {
+            MemoryDatabase.getInstance(applicationContext).memoryDao().getAll()
+                .any { it.id == reminderId && it.type == "TASK" && it.content.startsWith("OPEN|") }
+        }
+        if (!stillOpen) return Result.success()
         val manager = applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             manager.createNotificationChannel(
