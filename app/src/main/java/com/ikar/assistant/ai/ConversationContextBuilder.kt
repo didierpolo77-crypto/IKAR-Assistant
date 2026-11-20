@@ -43,7 +43,7 @@ object ConversationContextBuilder {
         val terms = normalize(question).split(Regex("[^\\p{L}\\p{N}]+")).filter { it.length >= 3 && it !in stopWords }.toSet()
         if (terms.isEmpty()) return emptyList()
         return entries.asSequence()
-            .filter { it.type == "NOTE" || it.type == "OCR" }
+            .filter { it.type == "NOTE" || it.type == "OCR" || it.type == "DOCUMENT" }
             .map { entry ->
                 val content = normalize(entry.content)
                 val words = content.split(Regex("[^\\p{L}\\p{N}]+")).toSet()
@@ -52,7 +52,20 @@ object ConversationContextBuilder {
             .filter { it.second > 0 }
             .sortedByDescending { it.second }
             .take(maxItems)
-            .map { it.first.copy(content = it.first.content.take(400)) }
+            .map { (entry, _) ->
+                if (entry.type != "DOCUMENT") {
+                    entry.copy(content = entry.content.take(400))
+                } else {
+                    val paragraphs = entry.content.split(Regex("\\n+")).map { it.trim() }.filter { it.isNotBlank() }
+                    val ranked = paragraphs.drop(1).map { paragraph ->
+                        val normalized = normalize(paragraph)
+                        paragraph to terms.count { normalized.contains(it) }
+                    }.filter { it.second > 0 }.sortedByDescending { it.second }.take(2)
+                    val title = paragraphs.firstOrNull().orEmpty().take(100)
+                    val excerpt = (listOf(title) + ranked.map { it.first }).joinToString("\\n")
+                    entry.copy(content = excerpt.take(400))
+                }
+            }
             .toList()
     }
 
