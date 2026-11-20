@@ -8,7 +8,7 @@ import org.junit.Test
 class MemoryCommandParserTest {
     @Test
     fun extractsExplicitRememberCommand() {
-        assertEquals("Je préfère les réponses courtes", MemoryCommandParser.extract("Mémorise que je préfère les réponses courtes"))
+        assertEquals("je préfère les réponses courtes", MemoryCommandParser.extract("Mémorise que je préfère les réponses courtes"))
         assertEquals("je travaille sur IKAR", MemoryCommandParser.extract("Souviens-toi que je travaille sur IKAR"))
     }
 
