@@ -377,7 +377,7 @@ private fun IkarHome(
                         memoryDao.insert(
                             MemoryEntry(
                                 type = "DOCUMENT",
-                                content = "[${imported.title}]\\n\\n${imported.text}"
+                                content = "[${imported.title}]\n\n${imported.text}"
                             )
                         )
                     }
