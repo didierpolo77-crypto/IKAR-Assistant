@@ -20,5 +20,12 @@ class LocalDocumentRetrievalTest {
 
         assertEquals(1, matches.size)
         assertTrue(matches.first().content.contains("photosynthèse"))
+
+        val offlineAnswer = OfflineChatEngine.answer(
+            "Comment fonctionne la photosynthèse ?",
+            listOf(document)
+        )
+        assertTrue(offlineAnswer.contains("Document local"))
+        assertTrue(offlineAnswer.contains("photosynthèse"))
     }
 }
