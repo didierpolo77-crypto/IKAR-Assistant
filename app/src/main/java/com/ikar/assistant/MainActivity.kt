@@ -56,7 +56,7 @@ import com.ikar.assistant.ai.ConversationContextBuilder
 import com.ikar.assistant.ai.RenderOnlineModelGateway
 import com.ikar.assistant.ai.MemoryCommandParser
 import com.ikar.assistant.ai.IkarOrchestrator
-import com.ikar.assistant.ai.WikipediaResearch
+import com.ikar.assistant.ai.WebResearch
 import com.ikar.assistant.security.SpywareScanner
 import com.ikar.assistant.security.SecurityReport
 import com.ikar.assistant.security.FileScanner
@@ -648,7 +648,7 @@ private fun IkarHome(
                     }
                 }
                 Text("Décision de l’orchestrateur : $routingInfo", style = MaterialTheme.typography.bodySmall)
-                Text("Pour chercher des sources en ligne, écris par exemple : « Recherche sur Internet : énergie solaire ». Cette première recherche gratuite consulte Wikipédia en français et affiche les liens des articles.", style = MaterialTheme.typography.bodySmall)
+                Text("Pour chercher des sources en ligne, écris par exemple : « Recherche sur Internet : énergie solaire ». La recherche gratuite interroge Wikipédia, Google News et OpenAlex ; les sources disponibles sont indiquées dans la réponse.", style = MaterialTheme.typography.bodySmall)
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text("Lire les réponses à voix haute")
                     Switch(checked = speakReplies, onCheckedChange = { speakReplies = it })
@@ -752,7 +752,7 @@ private fun IkarHome(
                                                 }
                                             }
                                             IkarOrchestrator.Destination.WEB_RESEARCH -> {
-                                                WikipediaResearch.search(question)
+                                                WebResearch.search(question)
                                             }
                                             IkarOrchestrator.Destination.ONLINE_MODEL -> {
                                                 val relevantMemory = if (shareRelevantMemory) relevantMatches else emptyList()
