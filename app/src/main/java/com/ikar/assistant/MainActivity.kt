@@ -72,6 +72,11 @@ import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkManager
+import androidx.work.workDataOf
+import java.util.concurrent.TimeUnit
+import com.ikar.assistant.productivity.ReminderWorker
 import com.ikar.assistant.security.FolderAuditScheduler
 import com.ikar.assistant.diagnostics.BatteryTestPanel
 import com.ikar.assistant.diagnostics.RuntimeDiagnostics
@@ -213,6 +218,9 @@ private fun IkarHome(
     var shareRelevantMemory by remember { mutableStateOf(false) }
     var apiToken by remember { mutableStateOf("") }
     var noteText by remember { mutableStateOf("") }
+    var taskTitle by remember { mutableStateOf("") }
+    var reminderMinutes by remember { mutableStateOf("30") }
+    var productivityItems by remember { mutableStateOf<List<MemoryEntry>>(emptyList()) }
     var knowledgeImporting by remember { mutableStateOf(false) }
     var knowledgeStatus by remember { mutableStateOf("Aucun document importé.") }
     var memories by remember { mutableStateOf<List<MemoryEntry>>(emptyList()) }
@@ -311,6 +319,7 @@ private fun IkarHome(
     suspend fun refreshMemories() {
         val allEntries = withContext(Dispatchers.IO) { memoryDao.getAll() }
         memories = allEntries.filter { it.type == "NOTE" || it.type == "OCR" || it.type == "DOCUMENT" }
+        productivityItems = allEntries.filter { it.type == "TASK" }
         securityEvents = allEntries.filter { it.type == "SECURITY_EVENT" }.take(30)
         chatMessages = allEntries.filter { it.type == "USER_MESSAGE" || it.type == "ASSISTANT_MESSAGE" }.take(30).reversed()
     }
@@ -880,6 +889,70 @@ private fun IkarHome(
                     Text(if (knowledgeImporting) "Importation en cours…" else "Importer un document PDF ou texte")
                 }
                 Text(knowledgeStatus, style = MaterialTheme.typography.bodySmall)
+                Divider()
+                Text("Tâches et rappels", style = MaterialTheme.typography.titleMedium)
+                Text("Crée une tâche et programme une notification locale. Android peut retarder une notification selon les réglages de batterie ou les autorisations.")
+                OutlinedTextField(value = taskTitle, onValueChange = { taskTitle = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Nouvelle tâche ou rappel") }, singleLine = true)
+                OutlinedTextField(value = reminderMinutes, onValueChange = { reminderMinutes = it.filter(Char::isDigit).take(5) }, modifier = Modifier.fillMaxWidth(), label = { Text("Rappel dans combien de minutes ?") }, singleLine = true)
+                Button(
+                    onClick = {
+                        val title = taskTitle.trim()
+                        val minutes = reminderMinutes.toLongOrNull()
+                        if (title.isNotEmpty() && minutes != null && minutes in 1..43200) {
+                            scope.launch {
+                                try {
+                                    val id = withContext(Dispatchers.IO) {
+                                        memoryDao.insert(MemoryEntry(type = "TASK", content = "OPEN|$title"))
+                                    }
+                                    val request = OneTimeWorkRequestBuilder<ReminderWorker>()
+                                        .setInitialDelay(minutes, TimeUnit.MINUTES)
+                                        .setInputData(workDataOf("reminder_title" to title, "reminder_id" to id))
+                                        .build()
+                                    WorkManager.getInstance(context).enqueue(request)
+                                    taskTitle = ""
+                                    refreshMemories()
+                                    memoryError = "Tâche enregistrée. Notification programmée dans $minutes minute(s)."
+                                } catch (error: Exception) {
+                                    memoryError = "Impossible de programmer ce rappel : ${error.localizedMessage ?: "erreur"}"
+                                }
+                            }
+                        } else {
+                            memoryError = "Saisis un titre et un délai entre 1 et 43 200 minutes (30 jours)."
+                        }
+                    },
+                    enabled = taskTitle.isNotBlank() && (reminderMinutes.toLongOrNull() ?: 0L) in 1..43200,
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text("Enregistrer la tâche et programmer") }
+                productivityItems.forEach { item ->
+                    val completed = item.content.startsWith("DONE|")
+                    val title = item.content.removePrefix(if (completed) "DONE|" else "OPEN|")
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Column(Modifier.weight(1f)) {
+                            Text(title, style = MaterialTheme.typography.bodyMedium)
+                            Text(if (completed) "Terminée" else "À faire", style = MaterialTheme.typography.labelSmall)
+                        }
+                        Row {
+                            if (!completed) {
+                                Button(onClick = {
+                                    scope.launch {
+                                        withContext(Dispatchers.IO) {
+                                            memoryDao.delete(item)
+                                            memoryDao.insert(MemoryEntry(type = "TASK", content = "DONE|$title"))
+                                        }
+                                        refreshMemories()
+                                    }
+                                }) { Text("Terminer") }
+                            }
+                            Button(onClick = {
+                                scope.launch {
+                                    withContext(Dispatchers.IO) { memoryDao.delete(item) }
+                                    refreshMemories()
+                                }
+                            }) { Text("Supprimer") }
+                        }
+                    }
+                }
+                Divider()
                 OutlinedTextField(
                     value = noteText,
                     onValueChange = { noteText = it },
