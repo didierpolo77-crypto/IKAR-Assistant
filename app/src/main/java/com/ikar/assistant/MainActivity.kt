@@ -227,6 +227,8 @@ private fun IkarHome(
     val runtimeSnapshot = remember { RuntimeDiagnostics.capture(context) }
     val recognizerState = remember { mutableStateOf<SpeechRecognizer?>(null) }
     var memoryError by remember { mutableStateOf<String?>(null) }
+    var backendStatus by remember { mutableStateOf<String?>(null) }
+    var checkingBackend by remember { mutableStateOf(false) }
     var securityReport by remember { mutableStateOf<SecurityReport?>(null) }
     var securityScanRunning by remember { mutableStateOf(false) }
     var fileScanReport by remember { mutableStateOf<FileScanReport?>(null) }
@@ -685,6 +687,30 @@ private fun IkarHome(
                         "Le jeton reste uniquement en mémoire pendant cette session et n'est pas enregistré dans l'application.",
                         style = MaterialTheme.typography.bodySmall
                     )
+                    Button(
+                        onClick = {
+                            if (!checkingBackend) {
+                                checkingBackend = true
+                                scope.launch {
+                                    backendStatus = try {
+                                        withContext(Dispatchers.IO) {
+                                            RenderOnlineModelGateway.checkHealth().summary()
+                                        }
+                                    } catch (error: Exception) {
+                                        "Serveur inaccessible : " + (error.localizedMessage ?: "vérifie ta connexion Internet.")
+                                    }
+                                    checkingBackend = false
+                                }
+                            }
+                        },
+                        enabled = !checkingBackend && !sendingMessage,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(if (checkingBackend) "Vérification du serveur…" else "Tester la connexion au serveur IKAR")
+                    }
+                    backendStatus?.let {
+                        Text(it, style = MaterialTheme.typography.bodySmall)
+                    }
                 }
                 OutlinedTextField(
                     value = chatInput,
