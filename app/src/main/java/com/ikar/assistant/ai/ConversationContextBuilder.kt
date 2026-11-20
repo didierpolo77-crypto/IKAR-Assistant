@@ -58,7 +58,7 @@ object ConversationContextBuilder {
 
     private fun normalize(value: String): String =
         java.text.Normalizer.normalize(value.lowercase(java.util.Locale.ROOT), java.text.Normalizer.Form.NFD)
-            .replace(Regex("\\\\p{Mn}+"), "")
+            .filter { it.code !in 0x0300..0x036F }
             .replace("’", "'")
             .trim()
 
