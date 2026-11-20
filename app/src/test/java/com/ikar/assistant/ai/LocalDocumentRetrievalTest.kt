@@ -73,6 +73,6 @@ class LocalDocumentRetrievalTest {
         val answer = OfflineChatEngine.answer("continue", messages)
 
         assertTrue(answer.contains("Toi : Nous développons IKAR.\n\nIKAR :"))
-        assertFalse(answer.contains("\\\n"))
+        assertFalse(answer.contains("\\n"))
     }
 }
