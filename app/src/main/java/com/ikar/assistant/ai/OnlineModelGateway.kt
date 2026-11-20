@@ -61,12 +61,12 @@ object RenderOnlineModelGateway {
         }
 
         val historyJson = JSONArray()
-        history.takeLast(10).forEach { turn ->
+        history.takeLast(4).forEach { turn ->
             if ((turn.role == "user" || turn.role == "assistant") && turn.content.isNotBlank()) {
                 historyJson.put(
                     JSONObject()
                         .put("role", turn.role)
-                        .put("content", turn.content.take(2000))
+                        .put("content", turn.content.take(1000))
                 )
             }
         }
