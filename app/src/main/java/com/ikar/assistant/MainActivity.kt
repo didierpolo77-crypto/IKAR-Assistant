@@ -20,6 +20,12 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -31,6 +37,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.Divider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -108,8 +116,8 @@ class MainActivity : ComponentActivity() {
         }
         val memoryDao = MemoryDatabase.getInstance(applicationContext).memoryDao()
         setContent {
-            MaterialTheme {
-                Surface(modifier = Modifier.fillMaxSize()) {
+            MaterialTheme(colorScheme = darkColorScheme(primary = Color(0xFF31E7FF), secondary = Color(0xFFB65CFF), background = Color(0xFF070A18), surface = Color(0xFF121832), onPrimary = Color(0xFF06101D), onBackground = Color(0xFFF3F5FF), onSurface = Color(0xFFF3F5FF))) {
+                Surface(modifier = Modifier.fillMaxSize(), color = Color(0xFF070A18)) {
                     IkarHome(
                         memoryDao = memoryDao,
                         onPickImage = { uri, onResult -> recognizeText(uri, onResult) },
@@ -440,14 +448,16 @@ private fun IkarHome(
     }
 
     Column(
-        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
+        modifier = Modifier.fillMaxSize()
+            .background(Brush.verticalGradient(listOf(Color(0xFF080B1C), Color(0xFF11102D), Color(0xFF070A18))))
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp, vertical = 18.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
+        IkarBrandHeader()
+        IkarWelcomePanel()
+        IkarModuleDashboard(openTasks = productivityItems.count { it.content.startsWith("OPEN|") })
         PendingActionCenter(memoryDao = memoryDao)
-        Text("IKAR Assistant", style = MaterialTheme.typography.headlineMedium)
-        Text("Assistant Android — mémoire locale V2", style = MaterialTheme.typography.bodyMedium)
-
-        IkarModuleDashboard()
 
         Card(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -1040,75 +1050,74 @@ private fun IkarHome(
     }
 }
 
+
 @Composable
-private fun IkarModuleDashboard() {
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text("Ton espace personnel", style = MaterialTheme.typography.titleLarge)
-        Text(
-            "Accès rapide aux grands domaines d’IKAR. Les statuts indiquent les capacités actuelles, pas des fonctions encore en préparation.",
-            style = MaterialTheme.typography.bodySmall
-        )
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            IkarModuleTile(
-                title = "Voix",
-                status = "Disponible · basique",
-                detail = "Dictée Android et lecture des réponses.",
-                modifier = Modifier.weight(1f)
-            )
-            IkarModuleTile(
-                title = "Recherche",
-                status = "Partielle",
-                detail = "Wikipédia, Google News et OpenAlex.",
-                modifier = Modifier.weight(1f)
-            )
+private fun IkarBrandHeader() {
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Box(modifier = Modifier.size(54.dp).background(Brush.linearGradient(listOf(Color(0xFF7B4DFF), Color(0xFF00DFFF))), RoundedCornerShape(17.dp)), contentAlignment = androidx.compose.ui.Alignment.Center) {
+                Text("IK", color = Color.White, fontWeight = FontWeight.Black, style = MaterialTheme.typography.titleLarge)
+            }
+            Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
+                Text("IKAR Assistant", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Text("TON ASSISTANT INTELLIGENT", style = MaterialTheme.typography.labelSmall, color = Color(0xFF9CA8D5))
+            }
         }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            IkarModuleTile(
-                title = "Sécurité",
-                status = "Contrôles locaux",
-                detail = "Fichiers, permissions et dossier surveillé.",
-                modifier = Modifier.weight(1f)
-            )
-            IkarModuleTile(
-                title = "Productivité",
-                status = "En cours d’évolution",
-                detail = "Notes et documents ; rappels avancés à ajouter.",
-                modifier = Modifier.weight(1f)
-            )
-        }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            IkarModuleTile(
-                title = "Interface",
-                status = "Tableau de bord",
-                detail = "Vue d’ensemble des modules et de leur état.",
-                modifier = Modifier.weight(1f)
-            )
-            IkarModuleTile(
-                title = "Fiabilité",
-                status = "Diagnostics disponibles",
-                detail = "Tests automatisés et diagnostic appareil.",
-                modifier = Modifier.weight(1f)
-            )
+        Column(horizontalAlignment = androidx.compose.ui.Alignment.End) {
+            Text("VERSION", style = MaterialTheme.typography.labelSmall, color = Color(0xFF8E9ABD))
+            Text("0.56.0", color = Color(0xFF39E5FF), fontWeight = FontWeight.Bold)
         }
     }
 }
 
 @Composable
-private fun IkarModuleTile(
-    title: String,
-    status: String,
-    detail: String,
-    modifier: Modifier = Modifier
-) {
-    Card(modifier = modifier) {
-        Column(
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(5.dp)
-        ) {
-            Text(title, style = MaterialTheme.typography.titleMedium)
-            Text(status, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-            Text(detail, style = MaterialTheme.typography.bodySmall)
+private fun IkarWelcomePanel() {
+    Box(modifier = Modifier.fillMaxWidth().background(Brush.linearGradient(listOf(Color(0xFF172A58), Color(0xFF26134A), Color(0xFF101A35))), RoundedCornerShape(24.dp)).border(1.dp, Color(0xFF5368D9), RoundedCornerShape(24.dp)).padding(18.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("✦  VOTRE ESPACE INTELLIGENT", color = Color(0xFF55E9FF), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+            Text("Bonjour ! Je suis IKAR.", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = Color.White)
+            Text("Comment puis-je vous aider aujourd’hui ?", style = MaterialTheme.typography.bodyLarge, color = Color(0xFFE0E7FF))
+            Text("IA en ligne • Mémoire locale • Outils Android", style = MaterialTheme.typography.labelSmall, color = Color(0xFFB5BFEA))
         }
     }
 }
 
+@Composable
+private fun IkarModuleDashboard(openTasks: Int) {
+    Column(verticalArrangement = Arrangement.spacedBy(11.dp)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+            Text("VOS MODULES", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text("6 ESPACES", color = Color(0xFF8FA0D5), style = MaterialTheme.typography.labelSmall)
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            IkarModuleTile("🎙", "Voix", "Parlez à IKAR", Color(0xFF073B68), Modifier.weight(1f))
+            IkarModuleTile("⌕", "Recherche", "Explorer le web", Color(0xFF06483F), Modifier.weight(1f))
+            IkarModuleTile("⬡", "Sécurité", "Contrôles locaux", Color(0xFF56330C), Modifier.weight(1f))
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            IkarModuleTile("▣", "Productivité", "$openTasks tâche(s) à faire", Color(0xFF38216B), Modifier.weight(1f))
+            IkarModuleTile("✎", "Notes", "Notes et documents", Color(0xFF07513D), Modifier.weight(1f))
+            IkarModuleTile("◷", "Rappels", "Notifications locales", Color(0xFF5B204E), Modifier.weight(1f))
+        }
+        Box(Modifier.fillMaxWidth().background(Color(0xFF151B38), RoundedCornerShape(18.dp)).border(1.dp, Color(0xFF303C70), RoundedCornerShape(18.dp)).padding(14.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Text("MA JOURNÉE", color = Color(0xFF8FA5E9), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                    Text("$openTasks tâche(s) encore à faire", color = Color.White, style = MaterialTheme.typography.titleMedium)
+                }
+                Text("✦", color = Color(0xFF45DFFF), style = MaterialTheme.typography.headlineMedium)
+            }
+        }
+    }
+}
+
+@Composable
+private fun IkarModuleTile(symbol: String, title: String, detail: String, tint: Color, modifier: Modifier = Modifier) {
+    Box(modifier = modifier.background(Brush.linearGradient(listOf(tint, Color(0xFF151A38))), RoundedCornerShape(18.dp)).border(1.dp, tint.copy(alpha = 0.9f), RoundedCornerShape(18.dp)).padding(horizontal = 10.dp, vertical = 14.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
+            Text(symbol, color = Color(0xFF67E9FF), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+            Text(title, color = Color.White, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+            Text(detail, color = Color(0xFFC3CBE8), style = MaterialTheme.typography.labelSmall)
+        }
+    }
+}
