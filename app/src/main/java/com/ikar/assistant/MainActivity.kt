@@ -438,6 +438,8 @@ private fun IkarHome(
         Text("IKAR Assistant", style = MaterialTheme.typography.headlineMedium)
         Text("Assistant Android — mémoire locale V2", style = MaterialTheme.typography.bodyMedium)
 
+        IkarModuleDashboard()
+
         Card(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Protection anti-espionnage", style = MaterialTheme.typography.titleLarge)
@@ -964,3 +966,76 @@ private fun IkarHome(
         )
     }
 }
+
+@Composable
+private fun IkarModuleDashboard() {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text("Ton espace personnel", style = MaterialTheme.typography.titleLarge)
+        Text(
+            "Accès rapide aux grands domaines d’IKAR. Les statuts indiquent les capacités actuelles, pas des fonctions encore en préparation.",
+            style = MaterialTheme.typography.bodySmall
+        )
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            IkarModuleTile(
+                title = "Voix",
+                status = "Disponible · basique",
+                detail = "Dictée Android et lecture des réponses.",
+                modifier = Modifier.weight(1f)
+            )
+            IkarModuleTile(
+                title = "Recherche",
+                status = "Partielle",
+                detail = "Wikipédia, Google News et OpenAlex.",
+                modifier = Modifier.weight(1f)
+            )
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            IkarModuleTile(
+                title = "Sécurité",
+                status = "Contrôles locaux",
+                detail = "Fichiers, permissions et dossier surveillé.",
+                modifier = Modifier.weight(1f)
+            )
+            IkarModuleTile(
+                title = "Productivité",
+                status = "En cours d’évolution",
+                detail = "Notes et documents ; rappels avancés à ajouter.",
+                modifier = Modifier.weight(1f)
+            )
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            IkarModuleTile(
+                title = "Interface",
+                status = "Tableau de bord",
+                detail = "Vue d’ensemble des modules et de leur état.",
+                modifier = Modifier.weight(1f)
+            )
+            IkarModuleTile(
+                title = "Fiabilité",
+                status = "Diagnostics disponibles",
+                detail = "Tests automatisés et diagnostic appareil.",
+                modifier = Modifier.weight(1f)
+            )
+        }
+    }
+}
+
+@Composable
+private fun IkarModuleTile(
+    title: String,
+    status: String,
+    detail: String,
+    modifier: Modifier = Modifier
+) {
+    Card(modifier = modifier) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(5.dp)
+        ) {
+            Text(title, style = MaterialTheme.typography.titleMedium)
+            Text(status, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+            Text(detail, style = MaterialTheme.typography.bodySmall)
+        }
+    }
+}
+
