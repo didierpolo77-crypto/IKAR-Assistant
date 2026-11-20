@@ -62,7 +62,7 @@ object ConversationContextBuilder {
                         paragraph to terms.count { normalized.contains(it) }
                     }.filter { it.second > 0 }.sortedByDescending { it.second }.take(2)
                     val title = paragraphs.firstOrNull().orEmpty().take(100)
-                    val excerpt = (listOf(title) + ranked.map { it.first }).joinToString("\\n")
+                    val excerpt = (listOf(title) + ranked.map { it.first }).joinToString("\n")
                     entry.copy(content = excerpt.take(400))
                 }
             }
