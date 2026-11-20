@@ -874,7 +874,7 @@ private fun IkarHome(
         }
         Spacer(Modifier.height(8.dp))
         Text(
-            "Confidentialité : les notes et textes extraits restent locaux. Ils ne sont envoyés au serveur que si tu actives explicitement « Inclure les notes pertinentes » en mode en ligne.",
+            "Confidentialité : les notes, textes extraits et documents restent locaux. Ils ne sont envoyés au serveur que si tu actives explicitement le partage des éléments pertinents en mode en ligne.",
             style = MaterialTheme.typography.bodySmall
         )
     }
