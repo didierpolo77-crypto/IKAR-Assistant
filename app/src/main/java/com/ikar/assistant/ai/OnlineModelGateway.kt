@@ -51,13 +51,13 @@ data class BackendHealth(
 ) {
     fun summary(): String = buildString {
         append(if (status.equals("online", ignoreCase = true)) "Serveur Render accessible." else "État du serveur : $status.")
-        append("\\nConfiguration : ")
+        append("\nConfiguration : ")
         append(if (authenticationConfigured) "jeton IKAR présent" else "jeton IKAR manquant")
         append(" · ")
         append(if (modelConfigured) "modèle défini" else "modèle manquant")
         append(" · ")
         append(if (providerTokenConfigured) "jeton fournisseur présent" else "jeton fournisseur manquant")
-        append(".\\nCe contrôle confirme l'accès au serveur et la présence des réglages ; il ne garantit pas que Hugging Face acceptera la prochaine génération.")
+        append(".\nCe contrôle confirme l'accès au serveur et la présence des réglages ; il ne garantit pas que Hugging Face acceptera la prochaine génération.")
     }
 }
 
