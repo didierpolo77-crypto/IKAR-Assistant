@@ -371,7 +371,7 @@ private fun IkarHome(
             scope.launch {
                 try {
                     val imported = withContext(Dispatchers.IO) {
-                        LocalKnowledgeImporter.import(context.applicationContext, uri)
+                        LocalKnowledgeImporter.importDocument(context.applicationContext, uri)
                     }
                     withContext(Dispatchers.IO) {
                         memoryDao.insert(
