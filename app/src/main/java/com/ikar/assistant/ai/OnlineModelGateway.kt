@@ -2,6 +2,11 @@ package com.ikar.assistant.ai
 
 import java.net.URI
 
+import org.json.JSONArray
+import org.json.JSONObject
+import java.net.HttpURLConnection
+import java.net.URL
+
 /**
  * Contract for a future HTTPS backend. No provider key or model endpoint is
  * bundled in the APK. Until a backend is configured, online mode stays off.
@@ -37,11 +42,6 @@ interface OnlineModelGateway {
     suspend fun generate(request: OnlineModelRequest): OnlineModelResult
 }
 
-
-import org.json.JSONArray
-import org.json.JSONObject
-import java.net.HttpURLConnection
-import java.net.URL
 
 /**
  * HTTPS client for the Render API. The app supplies the access token at runtime;
