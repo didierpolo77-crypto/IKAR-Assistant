@@ -40,7 +40,7 @@ object OfflineChatEngine {
             return "Je suis IKAR Assistant. Je combine une mémoire locale, la lecture de texte dans les images, des outils de vérification de fichiers et une première couche de décision hors connexion. Je ne suis pas encore un modèle conversationnel général comme JARVIS."
         }
         if (normalized.contains("que sais tu de moi") || normalized.contains("ma memoire") || normalized.contains("mes notes")) {
-            val saved = memories.filter { it.type == "NOTE" || it.type == "OCR" }
+            val saved = memories.filter { it.type == "NOTE" || it.type == "OCR" || it.type == "DOCUMENT" }
             return if (saved.isEmpty()) "Ta mémoire locale ne contient encore aucune note ni aucun texte extrait."
             else "J'ai " + saved.size + " élément(s) dans ta mémoire locale. Pose une question précise pour que je recherche l'information correspondante."
         }
@@ -54,21 +54,17 @@ object OfflineChatEngine {
 
         if (terms.isEmpty()) return "Je n'ai pas assez de mots-clés pour chercher dans ta mémoire. Reformule avec un ou deux termes importants."
 
-        val ranked = memories.filter { it.type == "NOTE" || it.type == "OCR" }
-            .map { entry ->
-                val content = normalize(entry.content)
-                val words = content.split(Regex("[^\\p{L}\\p{N}]+")).toSet()
-                entry to terms.count { it in words || content.contains(it) }
+        val ranked = ConversationContextBuilder.relevantMemories(question, memories)
+
+        if (ranked.isEmpty()) return "Je n'ai pas trouvé cette information dans tes notes ou documents locaux. Sans connexion, je ne peux pas encore interroger un moteur de connaissances général. Importe un document ou enregistre une note contenant cette information pour que je puisse la retrouver plus tard."
+
+        val excerpts = ranked.joinToString("\n\n") { entry ->
+            val label = when (entry.type) {
+                "OCR" -> "Texte extrait d'image"
+                "DOCUMENT" -> "Document local"
+                else -> "Note personnelle"
             }
-            .filter { it.second > 0 }
-            .sortedByDescending { it.second }
-            .take(3)
-
-        if (ranked.isEmpty()) return "Je n'ai pas trouvé cette information dans ta mémoire locale. Sans connexion, je ne peux pas encore interroger un moteur de connaissances général. Enregistre une note contenant cette information pour que je puisse la retrouver plus tard."
-
-        val excerpts = ranked.joinToString("\n\n") { (entry, score) ->
-            val label = if (entry.type == "OCR") "Texte extrait d'image" else "Note personnelle"
-            "• " + label + " (correspondance : " + score + ") :\n" + entry.content.trim().take(700)
+            "• " + label + " :\n" + entry.content.trim()
         }
         return "Voici ce que j'ai retrouvé dans ta mémoire locale :\n\n" + excerpts +
             "\n\nCes résultats proviennent uniquement des données enregistrées sur ce téléphone."
