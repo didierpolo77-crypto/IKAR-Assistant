@@ -49,6 +49,28 @@ class IkarOrchestratorTest {
     }
 
     @Test
+    fun explicitInternetResearchUsesWebResearchProvider() {
+        val plan = IkarOrchestrator.plan(
+            "Recherche sur Internet : les panneaux solaires",
+            connectedMode = false,
+            shareRelevantMemory = false,
+            hasRelevantMemory = false
+        )
+        assertEquals(IkarOrchestrator.Destination.WEB_RESEARCH, plan.destination)
+    }
+
+    @Test
+    fun explicitInternetResearchTakesPriorityOverUnsharedLocalMatches() {
+        val plan = IkarOrchestrator.plan(
+            "Cherche sur le web les dernières informations sur l'énergie solaire",
+            connectedMode = true,
+            shareRelevantMemory = false,
+            hasRelevantMemory = true
+        )
+        assertEquals(IkarOrchestrator.Destination.WEB_RESEARCH, plan.destination)
+    }
+
+    @Test
     fun connectedGeneralQuestionUsesOnlineModel() {
         val plan = IkarOrchestrator.plan(
             "Explique-moi le fonctionnement des panneaux solaires",
