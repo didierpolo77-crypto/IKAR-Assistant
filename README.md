@@ -20,3 +20,6 @@ Chaque source est isolée : une panne ou une limitation d'un fournisseur n'empê
 - La compilation vérifie les tests unitaires et la compatibilité native ARM 32 bits.
 - Les capacités d'analyse de sécurité sont limitées aux fichiers, applications et dossiers auxquels Android accorde explicitement l'accès.
 - Le mode hors connexion ne prétend pas être un grand modèle conversationnel général.
+
+## Diagnostic du serveur (v0.53.0)
+Dans le mode connecté, IKAR peut interroger la route HTTPS `/health` de Render. Le diagnostic indique si le serveur répond et si les variables de configuration attendues sont présentes. Il ne lance pas une génération Hugging Face et ne garantit donc pas la disponibilité, le quota ou les crédits du fournisseur.
