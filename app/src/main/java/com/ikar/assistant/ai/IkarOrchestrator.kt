@@ -59,8 +59,8 @@ object IkarOrchestrator {
         if (asksForWebResearch) {
             return Plan(
                 Destination.WEB_RESEARCH,
-                "Recherche web (Wikipédia)",
-                "La demande sollicite explicitement une recherche Internet ; IKAR consulte des articles de l’encyclopédie Wikipédia en français."
+                "Recherche Internet multi-sources",
+                "La demande sollicite une recherche Internet ; IKAR interroge des sources encyclopédiques, d’actualité et scientifiques."
             )
         }
 
