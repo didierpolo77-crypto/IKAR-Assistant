@@ -12,6 +12,7 @@ object IkarOrchestrator {
         REMEMBER_LOCALLY,
         LOCAL_SECURITY_GUIDANCE,
         LOCAL_KNOWLEDGE,
+        WEB_RESEARCH,
         ONLINE_MODEL,
         OFFLINE_ASSISTANT
     }
@@ -47,6 +48,22 @@ object IkarOrchestrator {
         }
 
         val normalized = normalize(question)
+        val asksForWebResearch = listOf(
+            "cherche sur internet", "recherche sur internet",
+            "cherche sur le web", "recherche sur le web",
+            "fais une recherche web", "recherche web",
+            "trouve des sources sur internet", "cherche des sources",
+            "actualites recentes", "derniere actualite", "dernieres actualites"
+        ).any { normalized.contains(it) }
+
+        if (asksForWebResearch) {
+            return Plan(
+                Destination.WEB_RESEARCH,
+                "Recherche web (Wikipédia)",
+                "La demande sollicite explicitement une recherche Internet ; IKAR consulte des articles de l’encyclopédie Wikipédia en français."
+            )
+        }
+
         val asksForLocalSources = listOf(
             "dans ma memoire", "dans mes notes", "dans mes documents",
             "dans mon document", "dans mon cours", "selon le pdf",
