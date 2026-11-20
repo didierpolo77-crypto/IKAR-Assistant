@@ -23,3 +23,7 @@ Chaque source est isolée : une panne ou une limitation d'un fournisseur n'empê
 
 ## Diagnostic du serveur (v0.53.0)
 Dans le mode connecté, IKAR peut interroger la route HTTPS `/health` de Render. Le diagnostic indique si le serveur répond et si les variables de configuration attendues sont présentes. Il ne lance pas une génération Hugging Face et ne garantit donc pas la disponibilité, le quota ou les crédits du fournisseur.
+
+
+## Test réel de génération IA (v0.54.0)
+Dans le mode connecté, le bouton « Tester une vraie réponse IA » envoie volontairement une courte demande au modèle via Render et Hugging Face. Une réponse reçue confirme le fonctionnement de la chaîne de génération à cet instant. Ce test consomme une requête du fournisseur et peut échouer si le modèle, le quota, les crédits ou le réseau sont indisponibles. Le jeton d’accès est utilisé en mémoire pendant la session et n’est pas enregistré par ce test.
