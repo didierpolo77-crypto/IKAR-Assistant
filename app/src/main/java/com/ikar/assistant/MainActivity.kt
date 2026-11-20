@@ -678,6 +678,7 @@ private fun IkarHome(
                                         val previousEntries = memoryDao.getAll()
                                         val history = previousEntries
                                             .filter { it.type == "USER_MESSAGE" || it.type == "ASSISTANT_MESSAGE" }
+                                            .sortedBy { it.createdAt }
                                             .takeLast(10)
                                             .map {
                                                 ConversationTurn(
