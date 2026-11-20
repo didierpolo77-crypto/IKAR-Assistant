@@ -56,7 +56,7 @@ object ConversationContextBuilder {
                 if (entry.type != "DOCUMENT") {
                     entry.copy(content = entry.content.take(400))
                 } else {
-                    val paragraphs = entry.content.split(Regex("\\n+")).map { it.trim() }.filter { it.isNotBlank() }
+                    val paragraphs = entry.content.split(Regex("\n+")).map { it.trim() }.filter { it.isNotBlank() }
                     val first = paragraphs.firstOrNull().orEmpty()
                     val hasHeading = first.length <= 100 && first.startsWith("[") && first.endsWith("]")
                     val heading = if (hasHeading) first else null
@@ -66,7 +66,7 @@ object ConversationContextBuilder {
                         paragraph to terms.count { it in paragraphTerms }
                     }.filter { it.second > 0 }.sortedByDescending { it.second }.take(2)
                     val selected = if (ranked.isNotEmpty()) ranked.map { it.first } else searchable.take(2)
-                    val excerpt = (listOfNotNull(heading) + selected).joinToString("\\n")
+                    val excerpt = (listOfNotNull(heading) + selected).joinToString("\n")
                     entry.copy(content = excerpt.take(700))
                 }
             }
