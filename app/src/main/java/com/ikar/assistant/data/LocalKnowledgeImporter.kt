@@ -33,7 +33,7 @@ object LocalKnowledgeImporter {
     private const val MAX_EXTRACTED_CHARS = 100_000
     private const val MAX_RENDER_WIDTH = 1200
 
-    fun import(context: Context, uri: Uri): ImportedKnowledgeDocument {
+    fun importDocument(context: Context, uri: Uri): ImportedKnowledgeDocument {
         val resolver = context.contentResolver
         val title = resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
             ?.use { cursor ->
