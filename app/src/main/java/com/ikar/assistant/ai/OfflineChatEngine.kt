@@ -13,13 +13,13 @@ object OfflineChatEngine {
         if (ConversationContextBuilder.isFollowUp(question)) {
             val recent = ConversationContextBuilder.recentMessages(question, memories)
             if (recent.isNotEmpty()) {
-                val transcript = recent.joinToString("\\n\\n") { entry ->
+                val transcript = recent.joinToString("\n\n") { entry ->
                     val speaker = if (entry.type == "USER_MESSAGE") "Toi" else "IKAR"
                     "$speaker : ${entry.content.trim().take(500)}"
                 }
-                return "Je reprends le fil à partir des messages récents enregistrés localement :\\n\\n" +
+                return "Je reprends le fil à partir des messages récents enregistrés localement :\n\n" +
                     transcript +
-                    "\\n\\nJe m'appuie sur ces messages tels qu'ils ont été enregistrés ; ils ne constituent pas une vérification indépendante des faits. " +
+                    "\n\nJe m'appuie sur ces messages tels qu'ils ont été enregistrés ; ils ne constituent pas une vérification indépendante des faits. " +
                     "Dis-moi quelle partie tu veux approfondir ou quelle étape je dois poursuivre."
             }
         }
