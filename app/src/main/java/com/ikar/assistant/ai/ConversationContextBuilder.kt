@@ -57,13 +57,17 @@ object ConversationContextBuilder {
                     entry.copy(content = entry.content.take(400))
                 } else {
                     val paragraphs = entry.content.split(Regex("\\n+")).map { it.trim() }.filter { it.isNotBlank() }
-                    val ranked = paragraphs.drop(1).map { paragraph ->
-                        val normalized = normalize(paragraph)
-                        paragraph to terms.count { normalized.contains(it) }
+                    val first = paragraphs.firstOrNull().orEmpty()
+                    val hasHeading = first.length <= 100 && first.startsWith("[") && first.endsWith("]")
+                    val heading = if (hasHeading) first else null
+                    val searchable = if (hasHeading) paragraphs.drop(1) else paragraphs
+                    val ranked = searchable.map { paragraph ->
+                        val paragraphTerms = normalize(paragraph).split(Regex("[^\\p{L}\\p{N}]+")).toSet()
+                        paragraph to terms.count { it in paragraphTerms }
                     }.filter { it.second > 0 }.sortedByDescending { it.second }.take(2)
-                    val title = paragraphs.firstOrNull().orEmpty().take(100)
-                    val excerpt = (listOf(title) + ranked.map { it.first }).joinToString("\n")
-                    entry.copy(content = excerpt.take(400))
+                    val selected = if (ranked.isNotEmpty()) ranked.map { it.first } else searchable.take(2)
+                    val excerpt = (listOfNotNull(heading) + selected).joinToString("\\n")
+                    entry.copy(content = excerpt.take(700))
                 }
             }
             .toList()
