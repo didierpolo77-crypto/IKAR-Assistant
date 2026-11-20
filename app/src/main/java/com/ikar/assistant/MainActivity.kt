@@ -229,6 +229,8 @@ private fun IkarHome(
     var memoryError by remember { mutableStateOf<String?>(null) }
     var backendStatus by remember { mutableStateOf<String?>(null) }
     var checkingBackend by remember { mutableStateOf(false) }
+    var testingInference by remember { mutableStateOf(false) }
+    var inferenceTestStatus by remember { mutableStateOf<String?>(null) }
     var securityReport by remember { mutableStateOf<SecurityReport?>(null) }
     var securityScanRunning by remember { mutableStateOf(false) }
     var fileScanReport by remember { mutableStateOf<FileScanReport?>(null) }
@@ -681,7 +683,7 @@ private fun IkarHome(
                         label = { Text("Jeton d'accès Render (IKAR_API_TOKEN)") },
                         visualTransformation = PasswordVisualTransformation(),
                         singleLine = true,
-                        enabled = !sendingMessage
+                        enabled = !sendingMessage && !testingInference
                     )
                     Text(
                         "Le jeton reste uniquement en mémoire pendant cette session et n'est pas enregistré dans l'application.",
@@ -709,6 +711,41 @@ private fun IkarHome(
                         Text(if (checkingBackend) "Vérification du serveur…" else "Tester la connexion au serveur IKAR")
                     }
                     backendStatus?.let {
+                        Text(it, style = MaterialTheme.typography.bodySmall)
+                    }
+
+                    Button(
+                        onClick = {
+                            if (!testingInference) {
+                                if (apiToken.isBlank()) {
+                                    inferenceTestStatus = "Saisis d'abord le jeton d'accès Render."
+                                } else {
+                                    testingInference = true
+                                    inferenceTestStatus = null
+                                    scope.launch {
+                                        inferenceTestStatus = try {
+                                            val reply = withContext(Dispatchers.IO) {
+                                                RenderOnlineModelGateway.sendMessage(
+                                                    apiToken = apiToken,
+                                                    message = "Réponds exactement par : IKAR fonctionne.",
+                                                    history = emptyList()
+                                                )
+                                            }
+                                            "Réponse réelle du modèle reçue : « ${reply.take(240)} »"
+                                        } catch (error: Exception) {
+                                            "Test IA échoué : ${error.localizedMessage ?: "erreur inconnue"}"
+                                        }
+                                        testingInference = false
+                                    }
+                                }
+                            }
+                        },
+                        enabled = !testingInference && !checkingBackend && !sendingMessage,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(if (testingInference) "Test réel en cours…" else "Tester une vraie réponse IA")
+                    }
+                    inferenceTestStatus?.let {
                         Text(it, style = MaterialTheme.typography.bodySmall)
                     }
                 }
