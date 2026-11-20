@@ -10,7 +10,7 @@ class LocalDocumentRetrievalTest {
     fun findsRelevantPassageInsideImportedDocument() {
         val document = MemoryEntry(
             type = "DOCUMENT",
-            content = "[Cours de biologie]\\n\\nLa photosynthèse permet aux plantes de transformer la lumière en énergie chimique.\\n\\nLa respiration cellulaire est un autre processus."
+            content = "[Cours de biologie]\n\\nLa photosynthèse permet aux plantes de transformer la lumière en énergie chimique.\\n\\nLa respiration cellulaire est un autre processus."
         )
 
         val matches = ConversationContextBuilder.relevantMemories(
