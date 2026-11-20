@@ -40,3 +40,12 @@ Cette version ajoute une vue d'ensemble dans l'accueil IKAR pour présenter les 
 - Fiabilité : diagnostics de l'appareil et tests automatisés existants.
 
 Cette vue décrit honnêtement l'état des fonctions. Elle ne signifie pas que les évolutions encore indiquées comme partielles sont terminées. La compatibilité cible reste Android 6+ (minSdk 23), Android 14 ciblé (targetSdk 34) et Java/Kotlin 17.
+
+
+## Version 0.56.0 — tâches et rappels locaux
+
+- Ajout d'une liste de tâches stockée dans la mémoire locale chiffrée Room.
+- Une tâche peut être marquée terminée ou supprimée.
+- Un rappel peut être programmé après un délai choisi en minutes (1 minute à 30 jours).
+- Les notifications sont exécutées par WorkManager ; Android peut les différer selon Doze, les restrictions batterie et les autorisations.
+- Les rappels ne sont pas une alarme à l'heure exacte. L'autorisation de notifications Android 13+ doit être accordée pour afficher les notifications.
