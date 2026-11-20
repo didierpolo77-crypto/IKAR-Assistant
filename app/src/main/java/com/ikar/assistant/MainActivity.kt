@@ -39,6 +39,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.app.NotificationCompat
@@ -49,6 +50,8 @@ import com.ikar.assistant.data.MemoryDatabase
 import com.ikar.assistant.data.MemoryEntry
 import com.ikar.assistant.data.MemoryDao
 import com.ikar.assistant.ai.OfflineChatEngine
+import com.ikar.assistant.ai.ConversationTurn
+import com.ikar.assistant.ai.RenderOnlineModelGateway
 import com.ikar.assistant.security.SpywareScanner
 import com.ikar.assistant.security.SecurityReport
 import com.ikar.assistant.security.FileScanner
@@ -202,6 +205,7 @@ private fun IkarHome(
     var recognizedText by remember { mutableStateOf("Le texte extrait de l'image apparaîtra ici.") }
     var processing by remember { mutableStateOf(false) }
     var connectedMode by remember { mutableStateOf(false) }
+    var apiToken by remember { mutableStateOf("") }
     var noteText by remember { mutableStateOf("") }
     var memories by remember { mutableStateOf<List<MemoryEntry>>(emptyList()) }
     var chatMessages by remember { mutableStateOf<List<MemoryEntry>>(emptyList()) }
@@ -605,6 +609,32 @@ private fun IkarHome(
                     Text("Lire les réponses à voix haute")
                     Switch(checked = speakReplies, onCheckedChange = { speakReplies = it })
                 }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Utiliser l'IA en ligne")
+                        Text(
+                            if (connectedMode) "Les messages seront envoyés au serveur IKAR."
+                            else "Discussion locale sur ce téléphone.",
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                    Switch(checked = connectedMode, onCheckedChange = { connectedMode = it })
+                }
+                if (connectedMode) {
+                    OutlinedTextField(
+                        value = apiToken,
+                        onValueChange = { apiToken = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("Jeton d'accès Render (IKAR_API_TOKEN)") },
+                        visualTransformation = PasswordVisualTransformation(),
+                        singleLine = true,
+                        enabled = !sendingMessage
+                    )
+                    Text(
+                        "Le jeton reste uniquement en mémoire pendant cette session et n'est pas enregistré dans l'application.",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
                 OutlinedTextField(
                     value = chatInput,
                     onValueChange = { chatInput = it },
@@ -636,9 +666,23 @@ private fun IkarHome(
                             scope.launch {
                                 try {
                                     val answer = withContext(Dispatchers.IO) {
+                                        val previousEntries = memoryDao.getAll()
+                                        val history = previousEntries
+                                            .filter { it.type == "USER_MESSAGE" || it.type == "ASSISTANT_MESSAGE" }
+                                            .takeLast(10)
+                                            .map {
+                                                ConversationTurn(
+                                                    role = if (it.type == "USER_MESSAGE") "user" else "assistant",
+                                                    content = it.content
+                                                )
+                                            }
                                         memoryDao.insert(MemoryEntry(type = "USER_MESSAGE", content = question))
-                                        val savedEntries = memoryDao.getAll()
-                                        val reply = OfflineChatEngine.answer(question, savedEntries)
+                                        val reply = if (connectedMode) {
+                                            RenderOnlineModelGateway.sendMessage(apiToken, question, history)
+                                        } else {
+                                            val savedEntries = memoryDao.getAll()
+                                            OfflineChatEngine.answer(question, savedEntries)
+                                        }
                                         memoryDao.insert(MemoryEntry(type = "ASSISTANT_MESSAGE", content = reply))
                                         reply
                                     }
@@ -647,7 +691,7 @@ private fun IkarHome(
                                     if (speakReplies) onSpeak(answer)
                                 } catch (error: Exception) {
                                     chatInput = question
-                                    memoryError = "Impossible d'enregistrer la conversation. Réessaie."
+                                    memoryError = error.localizedMessage ?: "Impossible de contacter IKAR. Réessaie."
                                 } finally {
                                     sendingMessage = false
                                 }
@@ -659,7 +703,7 @@ private fun IkarHome(
                 ) {
                     Text(if (sendingMessage) "IKAR réfléchit…" else "Envoyer")
                 }
-                Text("Moteur local simple : les réponses générales et la recherche Internet ne sont pas encore intégrées.", style = MaterialTheme.typography.labelSmall)
+                Text(if (connectedMode) "Mode connecté : les messages partent vers Hugging Face via le serveur Render. Une connexion Internet est nécessaire." else "Mode hors connexion : moteur local simple et mémoire du téléphone.", style = MaterialTheme.typography.labelSmall)
             }
         }
 
@@ -754,24 +798,6 @@ private fun IkarHome(
                     Text(if (processing) "Lecture en cours…" else "Choisir une image")
                 }
                 Text(recognizedText, style = MaterialTheme.typography.bodyMedium)
-            }
-        }
-
-        Card(Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Mode de fonctionnement", style = MaterialTheme.typography.titleMedium)
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Column(Modifier.weight(1f)) {
-                        Text("Préférence mode connecté")
-                        Text("Le serveur distant n'est pas encore configuré.", style = MaterialTheme.typography.bodySmall)
-                    }
-                    Switch(checked = connectedMode, onCheckedChange = { connectedMode = it })
-                }
-                Text(
-                    if (connectedMode) "Mode connecté sélectionné, mais aucune requête serveur n'est envoyée tant que le backend n'est pas configuré."
-                    else "Mode hors connexion : la mémoire et l'OCR local restent disponibles.",
-                    style = MaterialTheme.typography.bodySmall
-                )
             }
         }
 
