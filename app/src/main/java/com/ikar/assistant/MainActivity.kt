@@ -49,6 +49,7 @@ import androidx.room.Room
 import com.ikar.assistant.data.MemoryDatabase
 import com.ikar.assistant.data.MemoryEntry
 import com.ikar.assistant.data.MemoryDao
+import com.ikar.assistant.data.LocalKnowledgeImporter
 import com.ikar.assistant.ai.OfflineChatEngine
 import com.ikar.assistant.ai.ConversationTurn
 import com.ikar.assistant.ai.ConversationContextBuilder
@@ -210,6 +211,8 @@ private fun IkarHome(
     var shareRelevantMemory by remember { mutableStateOf(false) }
     var apiToken by remember { mutableStateOf("") }
     var noteText by remember { mutableStateOf("") }
+    var knowledgeImporting by remember { mutableStateOf(false) }
+    var knowledgeStatus by remember { mutableStateOf("Aucun document importé.") }
     var memories by remember { mutableStateOf<List<MemoryEntry>>(emptyList()) }
     var chatMessages by remember { mutableStateOf<List<MemoryEntry>>(emptyList()) }
     var chatInput by remember { mutableStateOf("") }
@@ -300,7 +303,7 @@ private fun IkarHome(
 
     suspend fun refreshMemories() {
         val allEntries = withContext(Dispatchers.IO) { memoryDao.getAll() }
-        memories = allEntries.filter { it.type == "NOTE" || it.type == "OCR" }
+        memories = allEntries.filter { it.type == "NOTE" || it.type == "OCR" || it.type == "DOCUMENT" }
         securityEvents = allEntries.filter { it.type == "SECURITY_EVENT" }.take(30)
         chatMessages = allEntries.filter { it.type == "USER_MESSAGE" || it.type == "ASSISTANT_MESSAGE" }.take(30).reversed()
     }
@@ -357,6 +360,39 @@ private fun IkarHome(
                     refreshMemories()
                 } catch (error: Exception) { memoryError = "Audit du dossier impossible : ${error.localizedMessage ?: "erreur inconnue"}" }
                 finally { folderScanRunning = false }
+            }
+        }
+    }
+
+    val knowledgePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null && !knowledgeImporting) {
+            knowledgeImporting = true
+            knowledgeStatus = "Lecture du document en cours sur le téléphone…"
+            scope.launch {
+                try {
+                    val imported = withContext(Dispatchers.IO) {
+                        LocalKnowledgeImporter.import(context.applicationContext, uri)
+                    }
+                    withContext(Dispatchers.IO) {
+                        memoryDao.insert(
+                            MemoryEntry(
+                                type = "DOCUMENT",
+                                content = "[${imported.title}]\\n\\n${imported.text}"
+                            )
+                        )
+                    }
+                    knowledgeStatus = if (imported.pagesRead != null) {
+                        "Document « ${imported.title} » importé. ${imported.pagesRead} page(s) analysée(s) localement."
+                    } else {
+                        "Document « ${imported.title} » importé dans la base locale."
+                    }
+                    refreshMemories()
+                    memoryError = null
+                } catch (error: Exception) {
+                    knowledgeStatus = "Import impossible : " + (error.localizedMessage ?: "format non pris en charge")
+                } finally {
+                    knowledgeImporting = false
+                }
             }
         }
     }
@@ -626,8 +662,8 @@ private fun IkarHome(
                 if (connectedMode) {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                         Column(Modifier.weight(1f)) {
-                            Text("Inclure les notes pertinentes")
-                            Text(if (shareRelevantMemory) "Les notes correspondantes seront envoyées avec ta question." else "Tes notes restent locales et ne sont pas envoyées.", style = MaterialTheme.typography.bodySmall)
+                            Text("Inclure les éléments pertinents")
+                            Text(if (shareRelevantMemory) "Les notes, textes OCR et extraits de documents correspondants seront envoyés avec ta question." else "Tes notes et documents restent locaux et ne sont pas envoyés.", style = MaterialTheme.typography.bodySmall)
                         }
                         Switch(checked = shareRelevantMemory, onCheckedChange = { shareRelevantMemory = it })
                     }
@@ -748,7 +784,15 @@ private fun IkarHome(
         Card(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Mémoire personnelle hors connexion", style = MaterialTheme.typography.titleMedium)
-                Text("Enregistre ici des notes que tu souhaites qu'IKAR puisse retrouver plus tard. Elles restent dans le stockage privé de cette application.")
+                Text("Enregistre des notes et importe des documents pour qu'IKAR puisse les retrouver hors connexion. Tout reste dans le stockage privé de cette application.")
+                Button(
+                    onClick = { knowledgePicker.launch(arrayOf("application/pdf", "text/plain", "text/markdown", "text/csv")) },
+                    enabled = !knowledgeImporting,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(if (knowledgeImporting) "Importation en cours…" else "Importer un document PDF ou texte")
+                }
+                Text(knowledgeStatus, style = MaterialTheme.typography.bodySmall)
                 OutlinedTextField(
                     value = noteText,
                     onValueChange = { noteText = it },
@@ -787,10 +831,10 @@ private fun IkarHome(
                     Card(Modifier.fillMaxWidth()) {
                         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             Text(
-                                if (entry.type == "OCR") "Texte extrait d'une image" else "Note personnelle",
+                                when (entry.type) { "OCR" -> "Texte extrait d'une image"; "DOCUMENT" -> "Document importé"; else -> "Note personnelle" },
                                 style = MaterialTheme.typography.labelLarge
                             )
-                            Text(entry.content, style = MaterialTheme.typography.bodyMedium)
+                            Text(entry.content.take(1000) + if (entry.content.length > 1000) "…" else "", style = MaterialTheme.typography.bodyMedium)
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                                 Button(onClick = {
                                     scope.launch {
