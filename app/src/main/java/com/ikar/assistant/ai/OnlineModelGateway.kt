@@ -43,13 +43,60 @@ interface OnlineModelGateway {
 }
 
 
+data class BackendHealth(
+    val status: String,
+    val authenticationConfigured: Boolean,
+    val modelConfigured: Boolean,
+    val providerTokenConfigured: Boolean
+) {
+    fun summary(): String = buildString {
+        append(if (status.equals("online", ignoreCase = true)) "Serveur Render accessible." else "État du serveur : $status.")
+        append("\\nConfiguration : ")
+        append(if (authenticationConfigured) "jeton IKAR présent" else "jeton IKAR manquant")
+        append(" · ")
+        append(if (modelConfigured) "modèle défini" else "modèle manquant")
+        append(" · ")
+        append(if (providerTokenConfigured) "jeton fournisseur présent" else "jeton fournisseur manquant")
+        append(".\\nCe contrôle confirme l'accès au serveur et la présence des réglages ; il ne garantit pas que Hugging Face acceptera la prochaine génération.")
+    }
+}
+
 /**
  * HTTPS client for the Render API. The app supplies the access token at runtime;
  * no server credential is embedded in the APK or persisted by this client.
- * Call sendMessage only from Dispatchers.IO.
+ * Call network methods only from Dispatchers.IO.
  */
 object RenderOnlineModelGateway {
     private const val ENDPOINT = "https://ikar-cloudflare-worker-1.onrender.com/v1/chat"
+    private const val HEALTH_ENDPOINT = "https://ikar-cloudflare-worker-1.onrender.com/health"
+
+    fun checkHealth(): BackendHealth {
+        val connection = (URL(HEALTH_ENDPOINT).openConnection() as HttpURLConnection).apply {
+            requestMethod = "GET"
+            connectTimeout = 12_000
+            readTimeout = 15_000
+            setRequestProperty("Accept", "application/json")
+        }
+        try {
+            val statusCode = connection.responseCode
+            val stream = if (statusCode in 200..299) connection.inputStream else connection.errorStream
+            val body = stream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
+            if (statusCode !in 200..299) {
+                throw IllegalStateException("Le serveur Render répond HTTP $statusCode.")
+            }
+            val json = runCatching { JSONObject(body) }.getOrElse {
+                throw IllegalStateException("La réponse de santé du serveur est illisible.")
+            }
+            return BackendHealth(
+                status = json.optString("status", "inconnu"),
+                authenticationConfigured = json.optBoolean("authentication_configured", false),
+                modelConfigured = json.optBoolean("model_configured", false),
+                providerTokenConfigured = json.optBoolean("hf_token_configured", false)
+            )
+        } finally {
+            connection.disconnect()
+        }
+    }
 
     fun sendMessage(
         apiToken: String,
