@@ -13,8 +13,8 @@ android {
         applicationId = "com.ikar.assistant"
         minSdk = 23
         targetSdk = 34
-        versionCode = 53
-        versionName = "0.53.0"
+        versionCode = 54
+        versionName = "0.54.0"
     }
 
     buildTypes {
