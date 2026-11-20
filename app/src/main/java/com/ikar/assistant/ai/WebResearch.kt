@@ -162,7 +162,11 @@ object WebResearch {
                 XmlPullParser.END_TAG -> if (parser.name == "item" && inItem) {
                     if (title.isNotBlank() && link.startsWith("https://")) {
                         val attribution = listOf(source, date).filter { it.isNotBlank() }.joinToString(" · ")
-                        items.add("$title" + if (attribution.isNotBlank()) "\n$attribution" else "" + "\nSource : $link")
+                        items.add(buildString {
+                            append(title)
+                            if (attribution.isNotBlank()) append("\n").append(attribution)
+                            append("\nSource : ").append(link)
+                        })
                     }
                     inItem = false
                 }
@@ -191,7 +195,11 @@ object WebResearch {
             val link = landingPage.ifBlank { doi.orEmpty() }.ifBlank { work.optString("id") }
             val metadata = listOfNotNull(year?.toString(), authors.takeIf { it.isNotEmpty() }?.joinToString(", "))
                 .joinToString(" · ")
-            "$title" + if (metadata.isNotBlank()) "\n$metadata" else "" + if (link.isNotBlank()) "\nRéférence : $link" else ""
+            buildString {
+                append(title)
+                if (metadata.isNotBlank()) append("\n").append(metadata)
+                if (link.isNotBlank()) append("\nRéférence : ").append(link)
+            }
         }
     }
 
