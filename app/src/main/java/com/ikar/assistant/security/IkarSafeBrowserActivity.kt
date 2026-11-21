@@ -158,8 +158,8 @@ class IkarSafeBrowserActivity : Activity() {
             status.text = "Lien à vérifier · navigation suspendue en attendant ton accord."
             AlertDialog.Builder(this)
                 .setTitle("Vérification de sécurité")
-                .setMessage(localAssessment.reasons.joinToString("\\n\\n") +
-                    "\\n\\nIKAR ne peut pas confirmer à lui seul qu'un lien est malveillant. Veux-tu quand même l'ouvrir ?")
+                .setMessage(localAssessment.reasons.joinToString("\n\n") +
+                    "\n\nIKAR ne peut pas confirmer à lui seul qu'un lien est malveillant. Veux-tu quand même l'ouvrir ?")
                 .setNegativeButton("Retour", null)
                 .setPositiveButton("Continuer") { _, _ ->
                     status.text = "Ouverture avec avertissement · Safe Browsing Android en complément."
