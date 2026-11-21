@@ -5,6 +5,7 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.net.VpnService
 import android.content.Intent
 import android.provider.Settings
 import android.speech.tts.TextToSpeech
@@ -81,6 +82,10 @@ import com.ikar.assistant.security.SecurityCenter
 import com.ikar.assistant.security.PendingActionCenter
 import com.ikar.assistant.security.ActionAudit
 import com.ikar.assistant.security.FolderRiskReport
+import com.ikar.assistant.security.ThreatIntelStore
+import com.ikar.assistant.security.ThreatIntelScheduler
+import com.ikar.assistant.security.IkarDnsFirewallService
+import com.ikar.assistant.security.SharedStorageBehaviorMonitor
 import com.ikar.assistant.security.LinkRiskReport
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
@@ -138,6 +143,16 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        SharedStorageBehaviorMonitor.start(this)
+    }
+
+    override fun onStop() {
+        SharedStorageBehaviorMonitor.stop()
+        super.onStop()
     }
 
     private fun speakReply(message: String) {
@@ -277,6 +292,11 @@ private fun IkarHome(
     var linkReport by remember { mutableStateOf<LinkRiskReport?>(null) }
     var emergencyMode by remember { mutableStateOf(SecurityCenter.isEmergency(context)) }
     var securityEvents by remember { mutableStateOf<List<MemoryEntry>>(emptyList()) }
+    var threatIntelAuthKey by remember { mutableStateOf("") }
+    var threatIntelStatus by remember { mutableStateOf("Base de réputation non configurée.") }
+    var threatIntelCount by remember { mutableIntStateOf(ThreatIntelStore.indicatorCount(context)) }
+    var firewallRunning by remember { mutableStateOf(context.getSharedPreferences("ikar_security_center", android.content.Context.MODE_PRIVATE).getBoolean("dns_firewall_running", false)) }
+    var observedMediaChanges by remember { mutableIntStateOf(SharedStorageBehaviorMonitor.recentChangeCount(context)) }
 
     DisposableEffect(Unit) {
         onDispose {
@@ -375,6 +395,14 @@ private fun IkarHome(
         else memoryError = "Autorise le microphone pour parler à IKAR."
     }
     val scope = rememberCoroutineScope()
+    val vpnConsentLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == android.app.Activity.RESULT_OK) {
+            ContextCompat.startForegroundService(context, Intent(context, IkarDnsFirewallService::class.java))
+            firewallRunning = true
+        } else {
+            memoryError = "L'autorisation VPN Android a été refusée. Le filtrage réseau reste désactivé."
+        }
+    }
     var selectedNavigation by remember { mutableStateOf("Accueil") }
     val homeRequester = remember { BringIntoViewRequester() }
     val securityRequester = remember { BringIntoViewRequester() }
@@ -394,6 +422,17 @@ private fun IkarHome(
             refreshMemories()
         } catch (error: Exception) {
             memoryError = "Impossible de charger la mémoire locale."
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        if (ThreatIntelStore.hasAuthKey(context)) {
+            ThreatIntelScheduler.enable(context)
+            threatIntelStatus = "Clé URLhaus enregistrée de façon chiffrée. Actualisation quotidienne programmée."
+        }
+        while (true) {
+            observedMediaChanges = SharedStorageBehaviorMonitor.recentChangeCount(context)
+            kotlinx.coroutines.delay(5000)
         }
     }
 
@@ -676,6 +715,7 @@ private fun IkarHome(
                 folderReport?.let { report ->
                     Text(report.message, style = MaterialTheme.typography.titleMedium)
                     Text("${report.inspected} fichiers examinés · ${report.changed} changements")
+                    Text("Ajouts : ${report.added} · Modifications : ${report.modified} · Suppressions : ${report.removed}", style = MaterialTheme.typography.bodySmall)
                     report.suspiciousNames.forEach { Text("Extension suspecte : $it", style = MaterialTheme.typography.bodySmall) }
                 }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -705,7 +745,65 @@ private fun IkarHome(
                         }
                     )
                 }
-                Text("Fréquence minimale Android : 15 minutes, mais le système peut retarder les contrôles pour économiser la batterie.", style = MaterialTheme.typography.bodySmall)
+                Text("Fréquence minimale Android : 15 minutes, mais le système peut retarder les contrôles pour économiser la batterie. IKAR compare les ajouts, modifications et suppressions ; il ne peut pas restaurer automatiquement les fichiers.", style = MaterialTheme.typography.bodySmall)
+                Text("Observation locale des médias partagés : $observedMediaChanges événement(s) détecté(s) pendant la dernière minute. Une rafale peut justifier un contrôle, mais les changements légitimes produisent aussi des événements. Observation active uniquement quand IKAR est ouvert.", style = MaterialTheme.typography.bodySmall)
+                if (SharedStorageBehaviorMonitor.recentBurstDetected(context)) {
+                    Text("Attention : une rafale de changements a été observée récemment dans les médias partagés. Lance un audit du dossier choisi.", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                }
+                Divider()
+                Text("Base de signatures et réputation", style = MaterialTheme.typography.titleMedium)
+                Text("Source : URLhaus (URLs de distribution de malwares actives). Une clé gratuite abuse.ch est nécessaire. La clé est chiffrée avec Android Keystore sur cet appareil ; elle n'est pas transmise à IKAR ni à son serveur.", style = MaterialTheme.typography.bodySmall)
+                OutlinedTextField(
+                    value = threatIntelAuthKey,
+                    onValueChange = { threatIntelAuthKey = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Clé Auth-Key URLhaus") },
+                    visualTransformation = PasswordVisualTransformation(),
+                    singleLine = true
+                )
+                Button(onClick = {
+                    try {
+                        ThreatIntelStore.saveAuthKey(context, threatIntelAuthKey)
+                        threatIntelAuthKey = ""
+                        ThreatIntelScheduler.enable(context)
+                        ThreatIntelScheduler.updateNow(context)
+                        threatIntelStatus = "Clé enregistrée de façon chiffrée. Première mise à jour demandée."
+                    } catch (error: Exception) {
+                        threatIntelStatus = "Impossible d'enregistrer la clé : ${error.localizedMessage ?: "vérifie la clé"}"
+                    }
+                }, enabled = threatIntelAuthKey.length >= 16, modifier = Modifier.fillMaxWidth()) {
+                    Text("Enregistrer la clé et actualiser la base")
+                }
+                Button(onClick = {
+                    if (ThreatIntelStore.hasAuthKey(context)) {
+                        ThreatIntelScheduler.updateNow(context)
+                        threatIntelStatus = "Mise à jour URLhaus demandée. Le résultat sera actualisé en arrière-plan."
+                    } else threatIntelStatus = "Enregistre d'abord une clé Auth-Key URLhaus."
+                }, enabled = ThreatIntelStore.hasAuthKey(context), modifier = Modifier.fillMaxWidth()) {
+                    Text("Actualiser maintenant")
+                }
+                Text(threatIntelStatus, style = MaterialTheme.typography.bodySmall)
+                Text("Indicateurs actifs enregistrés : $threatIntelCount · Dernière mise à jour : ${ThreatIntelStore.lastUpdatedAt(context).takeIf { it > 0 }?.let { java.text.DateFormat.getDateTimeInstance().format(java.util.Date(it)) } ?: "jamais"}", style = MaterialTheme.typography.bodySmall)
+                Text("Sans clé valide, aucune base URLhaus n'est téléchargée et seules les règles locales restent actives.", style = MaterialTheme.typography.bodySmall)
+                Divider()
+                Text("Pare-feu réseau facultatif", style = MaterialTheme.typography.titleMedium)
+                Text("IKAR propose un filtre DNS local via VPNService. Il bloque les domaines présents dans la base URLhaus locale et relaie les autres requêtes DNS IPv4. Ce n'est pas un pare-feu complet : les connexions directes, DNS chiffrés (DoH/DoT) et certains flux IPv6 peuvent contourner ce filtre.", style = MaterialTheme.typography.bodySmall)
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text(if (firewallRunning) "Filtre DNS actif" else "Filtre DNS désactivé")
+                    Switch(checked = firewallRunning, onCheckedChange = { enabled ->
+                        if (enabled) {
+                            val prepare = VpnService.prepare(context)
+                            if (prepare == null) {
+                                ContextCompat.startForegroundService(context, Intent(context, IkarDnsFirewallService::class.java))
+                                firewallRunning = true
+                            } else vpnConsentLauncher.launch(prepare)
+                        } else {
+                            context.stopService(Intent(context, IkarDnsFirewallService::class.java))
+                            firewallRunning = false
+                        }
+                    })
+                }
+                Text("Android affichera sa demande d'autorisation VPN. Le filtre ne doit être considéré actif qu'après établissement du tunnel.", style = MaterialTheme.typography.bodySmall)
                 Divider()
                 Text("Protection anti-phishing", style = MaterialTheme.typography.titleMedium)
                 Text("Navigation protégée sans VPN : les liens ouverts dans le navigateur IKAR sont contrôlés par Android Safe Browsing. Pour les liens reçus dans d'autres applications, choisis IKAR dans le menu Partager ou Ouvrir avec.", style = MaterialTheme.typography.bodySmall)
@@ -715,7 +813,12 @@ private fun IkarHome(
                 ) { Text("Ouvrir le navigateur protégé IKAR") }
                 OutlinedTextField(value = linkInput, onValueChange = { linkInput = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Colle un lien à vérifier") }, singleLine = true)
                 Button(onClick = {
-                    val report = SecurityCenter.checkLink(linkInput)
+                    val localReport = SecurityCenter.checkLink(linkInput)
+                    val feedMatch = ThreatIntelStore.isKnownMalicious(context, linkInput)
+                    val report = if (feedMatch) localReport.copy(
+                        suspicious = true,
+                        reasons = localReport.reasons + "Correspondance avec une URL active signalée par la base URLhaus téléchargée."
+                    ) else localReport
                     linkReport = report
                     if (speakReplies && report.suspicious) {
                         onSpeak("Attention. IKAR a relevé des indices suspects dans ce lien. Ne l'ouvre pas avant vérification. ${report.reasons.take(2).joinToString(". ")}")
@@ -763,7 +866,7 @@ private fun IkarHome(
                 else securityEvents.forEach { event ->
                     Text("• ${java.text.DateFormat.getDateTimeInstance().format(java.util.Date(event.createdAt))} — ${event.content}", style = MaterialTheme.typography.bodySmall)
                 }
-                Text("Mises à jour sécurisées : le canal de signatures distantes n'est pas encore configuré. IKAR n'installe aucune signature non vérifiée et ne télécharge pas de mise à jour en arrière-plan à ce stade.", style = MaterialTheme.typography.bodySmall)
+                Text("Mises à jour sécurisées : les indicateurs URLhaus sont utilisés comme réputation de domaines/URLs de distribution de malwares. Ils ne remplacent pas des signatures de fichiers YARA ou ClamAV.", style = MaterialTheme.typography.bodySmall)
             }
         }
 
@@ -1204,7 +1307,7 @@ private fun IkarBrandHeader() {
         }
         Column(horizontalAlignment = androidx.compose.ui.Alignment.End) {
             Text("VERSION", style = MaterialTheme.typography.labelSmall, color = Color(0xFF8E9ABD))
-            Text("0.62.0", color = Color(0xFF78E000), fontWeight = FontWeight.Bold)
+            Text("0.63.0", color = Color(0xFF78E000), fontWeight = FontWeight.Bold)
         }
     }
 }
