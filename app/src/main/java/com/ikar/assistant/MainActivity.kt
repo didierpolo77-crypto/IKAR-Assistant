@@ -252,6 +252,12 @@ private fun IkarHome(
     var inferenceTestStatus by remember { mutableStateOf<String?>(null) }
     var securityReport by remember { mutableStateOf<SecurityReport?>(null) }
     var securityScanRunning by remember { mutableStateOf(false) }
+    var securityNotificationsAllowed by remember {
+        mutableStateOf(
+            Build.VERSION.SDK_INT < 33 ||
+                ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+        )
+    }
     var aiSecurityRunningPackage by remember { mutableStateOf<String?>(null) }
     var aiSecurityAnalysis by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     var fileScanReport by remember { mutableStateOf<FileScanReport?>(null) }
@@ -445,6 +451,12 @@ private fun IkarHome(
         }
     }
 
+    val securityNotificationPermissionLauncher =
+        rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            securityNotificationsAllowed = granted
+            if (!granted) memoryError = "Les alertes d'installation IKAR resteront silencieuses tant que les notifications ne seront pas autorisées."
+        }
+
     val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null && !fileScanRunning) {
             fileScanRunning = true
@@ -486,6 +498,16 @@ private fun IkarHome(
         Card(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Protection anti-espionnage", style = MaterialTheme.typography.titleLarge)
+                if (Build.VERSION.SDK_INT >= 33 && !securityNotificationsAllowed) {
+                    Button(
+                        onClick = { securityNotificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS) },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Autoriser les alertes de sécurité en temps réel")
+                    }
+                } else {
+                    Text("Notifications de sécurité Android autorisées.", style = MaterialTheme.typography.bodySmall)
+                }
                 Text("Analyse locale des permissions sensibles et des accès spéciaux activés. Les résultats sont des signaux de risque, pas une preuve qu'une application est malveillante. L'analyse IA facultative envoie uniquement les métadonnées et les indices affichés, jamais le fichier APK.")
                 Button(
                     onClick = {
