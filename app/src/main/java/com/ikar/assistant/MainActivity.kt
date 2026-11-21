@@ -68,6 +68,7 @@ import com.ikar.assistant.ai.MemoryCommandParser
 import com.ikar.assistant.ai.IkarOrchestrator
 import com.ikar.assistant.ai.WebResearch
 import com.ikar.assistant.security.SpywareScanner
+import com.ikar.assistant.security.IkarSafeBrowserActivity
 import com.ikar.assistant.security.SecurityReport
 import com.ikar.assistant.security.FileScanner
 import com.ikar.assistant.security.FileScanReport
@@ -622,6 +623,11 @@ private fun IkarHome(
                 Text("Fréquence minimale Android : 15 minutes, mais le système peut retarder les contrôles pour économiser la batterie.", style = MaterialTheme.typography.bodySmall)
                 Divider()
                 Text("Protection anti-phishing", style = MaterialTheme.typography.titleMedium)
+                Text("Navigation protégée sans VPN : les liens ouverts dans le navigateur IKAR sont contrôlés par Android Safe Browsing. Pour les liens reçus dans d'autres applications, choisis IKAR dans le menu Partager ou Ouvrir avec.", style = MaterialTheme.typography.bodySmall)
+                Button(
+                    onClick = { context.startActivity(Intent(context, IkarSafeBrowserActivity::class.java)) },
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text("Ouvrir le navigateur protégé IKAR") }
                 OutlinedTextField(value = linkInput, onValueChange = { linkInput = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Colle un lien à vérifier") }, singleLine = true)
                 Button(onClick = {
                     val report = SecurityCenter.checkLink(linkInput)
