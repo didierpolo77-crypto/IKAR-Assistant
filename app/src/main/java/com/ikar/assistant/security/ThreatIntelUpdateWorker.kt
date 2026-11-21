@@ -47,59 +47,62 @@ class ThreatIntelUpdateWorker(
     appContext: Context,
     params: WorkerParameters
 ) : CoroutineWorker(appContext, params) {
+
+    private class AuthRejected : Exception()
+
     override suspend fun doWork(): Result {
         val authKey = ThreatIntelStore.readAuthKey(applicationContext)
             ?: run {
                 ThreatIntelStore.setUpdateStatus(applicationContext, "Clé URLhaus absente ou illisible.")
                 return Result.failure()
             }
-        var connection: HttpURLConnection? = null
         return try {
-            val endpoint = "https://urlhaus-api.abuse.ch/v1/urls/recent/limit/1000/"
-            connection = (URL(endpoint).openConnection() as HttpURLConnection).apply {
-                requestMethod = "GET"
-                connectTimeout = 15_000
-                readTimeout = 25_000
-                setRequestProperty("Auth-Key", authKey)
-                setRequestProperty("Accept", "application/json")
-                setRequestProperty("User-Agent", "IKAR-Assistant-Android")
-            }
-            val status = connection.responseCode
-            if (status !in 200..299) {
-                if (status == 401 || status == 403) {
-                    ThreatIntelStore.setUpdateStatus(applicationContext, "Clé URLhaus refusée (HTTP $status).")
-                    return Result.failure()
-                }
-                ThreatIntelStore.setUpdateStatus(applicationContext, "Serveur URLhaus temporairement indisponible (HTTP $status).")
+            val urlRoot = fetchJson("https://urlhaus-api.abuse.ch/v1/urls/recent/limit/1000/", authKey)
+            val payloadRoot = fetchJson("https://urlhaus-api.abuse.ch/v1/payloads/recent/limit/1000/", authKey)
+
+            val urlStatus = urlRoot.optString("query_status")
+            if (urlStatus != "ok" && urlStatus != "no_results") {
+                ThreatIntelStore.setUpdateStatus(applicationContext, "Réponse URLhaus URLs : $urlStatus.")
                 return Result.retry()
             }
-            val body = connection.inputStream.bufferedReader().use { it.readText() }
-            if (body.length > 8_000_000) return Result.failure()
-            val root = JSONObject(body)
-            if (root.optString("query_status") != "ok") {
-                ThreatIntelStore.setUpdateStatus(applicationContext, "URLhaus n'a pas confirmé la requête : ${root.optString("query_status")}.")
+            val payloadStatus = payloadRoot.optString("query_status")
+            if (payloadStatus != "ok" && payloadStatus != "no_results") {
+                ThreatIntelStore.setUpdateStatus(applicationContext, "Réponse URLhaus empreintes : $payloadStatus.")
                 return Result.retry()
             }
-            val items = root.optJSONArray("urls") ?: run {
-                ThreatIntelStore.setUpdateStatus(applicationContext, "Réponse URLhaus invalide : liste absente.")
-                return Result.retry()
-            }
-            val active = linkedSetOf<String>()
-            for (index in 0 until items.length()) {
-                val item = items.optJSONObject(index) ?: continue
-                val url = item.optString("url")
-                val state = item.optString("url_status")
-                if (state == "online" && (url.startsWith("http://") || url.startsWith("https://"))) {
-                    active += url
+
+            val activeUrls = linkedSetOf<String>()
+            val urlItems = urlRoot.optJSONArray("urls")
+            if (urlItems != null) {
+                for (index in 0 until urlItems.length()) {
+                    val item = urlItems.optJSONObject(index) ?: continue
+                    val url = item.optString("url")
+                    if (item.optString("url_status") == "online" &&
+                        (url.startsWith("http://") || url.startsWith("https://"))
+                    ) activeUrls += url
                 }
             }
-            if (active.isEmpty()) {
-                ThreatIntelStore.setUpdateStatus(applicationContext, "Aucun indicateur actif reçu ; ancienne base conservée.")
-                return Result.retry()
+
+            val hashes = linkedSetOf<String>()
+            val payloadItems = payloadRoot.optJSONArray("payloads")
+            if (payloadItems != null) {
+                for (index in 0 until payloadItems.length()) {
+                    val item = payloadItems.optJSONObject(index) ?: continue
+                    val hash = item.optString("sha256_hash")
+                    if (hash.matches(Regex("[a-fA-F0-9]{64}"))) hashes += hash.lowercase()
+                }
             }
-            ThreatIntelStore.replaceActiveUrls(applicationContext, active)
-            ThreatIntelStore.setUpdateStatus(applicationContext, "Mise à jour réussie : ${active.size} URLs actives reçues.")
+
+            ThreatIntelStore.replaceActiveUrls(applicationContext, activeUrls)
+            ThreatIntelStore.replaceKnownSha256(applicationContext, hashes)
+            ThreatIntelStore.setUpdateStatus(
+                applicationContext,
+                "Mise à jour réussie : ${activeUrls.size} URLs actives et ${hashes.size} empreintes SHA-256."
+            )
             Result.success()
+        } catch (_: AuthRejected) {
+            ThreatIntelStore.setUpdateStatus(applicationContext, "Clé URLhaus refusée. Vérifie ton Auth-Key.")
+            Result.failure()
         } catch (_: java.net.SocketTimeoutException) {
             ThreatIntelStore.setUpdateStatus(applicationContext, "Délai dépassé pendant la mise à jour URLhaus.")
             Result.retry()
@@ -109,8 +112,27 @@ class ThreatIntelUpdateWorker(
         } catch (error: Exception) {
             ThreatIntelStore.setUpdateStatus(applicationContext, "Erreur de mise à jour : ${error.javaClass.simpleName}.")
             Result.failure()
+        }
+    }
+
+    private fun fetchJson(endpoint: String, authKey: String): JSONObject {
+        val connection = (URL(endpoint).openConnection() as HttpURLConnection).apply {
+            requestMethod = "GET"
+            connectTimeout = 15_000
+            readTimeout = 25_000
+            setRequestProperty("Auth-Key", authKey)
+            setRequestProperty("Accept", "application/json")
+            setRequestProperty("User-Agent", "IKAR-Assistant-Android")
+        }
+        try {
+            val status = connection.responseCode
+            if (status == 401 || status == 403) throw AuthRejected()
+            if (status !in 200..299) throw java.io.IOException("HTTP $status")
+            val body = connection.inputStream.bufferedReader().use { it.readText() }
+            if (body.length > 8_000_000) throw java.io.IOException("Réponse URLhaus trop volumineuse")
+            return JSONObject(body)
         } finally {
-            connection?.disconnect()
+            connection.disconnect()
         }
     }
 }
