@@ -1167,7 +1167,7 @@ private fun IkarBrandHeader() {
         }
         Column(horizontalAlignment = androidx.compose.ui.Alignment.End) {
             Text("VERSION", style = MaterialTheme.typography.labelSmall, color = Color(0xFF8E9ABD))
-            Text("0.61.0", color = Color(0xFF39E5FF), fontWeight = FontWeight.Bold)
+            Text("0.62.0", color = Color(0xFF39E5FF), fontWeight = FontWeight.Bold)
         }
     }
 }
