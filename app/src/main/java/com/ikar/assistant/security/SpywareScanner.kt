@@ -11,6 +11,7 @@ data class AppRisk(
     val label: String,
     val packageName: String,
     val score: Int,
+    val severity: String,
     val reasons: List<String>,
     val isSystem: Boolean
 )
@@ -74,7 +75,7 @@ object SpywareScanner {
             val requested = packageInfo?.requestedPermissions.orEmpty().toSet()
             val permissionFlags = packageInfo?.requestedPermissionsFlags ?: intArrayOf()
             val reasons = mutableListOf<String>()
-            var score = 0
+            val signalIds = mutableSetOf<String>()
 
             sensitivePermissions.forEach { (permission, rule) ->
                 if (permission in requested) {
@@ -82,31 +83,44 @@ object SpywareScanner {
                     val granted = index >= 0 && ((permissionFlags.getOrNull(index) ?: 0)
                         and android.content.pm.PackageInfo.REQUESTED_PERMISSION_GRANTED) != 0
                     reasons += if (granted) "${rule.label} — autorisation accordée" else rule.label
-                    score += rule.weight + if (granted) 1 else 0
+                    when (permission) {
+                        Manifest.permission.READ_SMS,
+                        Manifest.permission.RECEIVE_SMS,
+                        Manifest.permission.SEND_SMS -> signalIds += "sms_access"
+                        Manifest.permission.RECORD_AUDIO -> signalIds += "microphone"
+                        Manifest.permission.CAMERA -> signalIds += "camera"
+                        Manifest.permission.ACCESS_FINE_LOCATION -> signalIds += "precise_location"
+                        Manifest.permission.ACCESS_BACKGROUND_LOCATION -> signalIds += "background_location"
+                        Manifest.permission.READ_CONTACTS -> signalIds += "contacts"
+                        Manifest.permission.READ_PHONE_STATE -> signalIds += "phone_state"
+                        Manifest.permission.READ_CALL_LOG -> signalIds += "call_log"
+                        Manifest.permission.READ_EXTERNAL_STORAGE,
+                        Manifest.permission.WRITE_EXTERNAL_STORAGE -> signalIds += "shared_storage"
+                    }
                 }
             }
 
             if (app.packageName in accessibilityPackages) {
                 reasons += "Service d'accessibilité activé — accès potentiellement étendu"
-                score += 5
+                signalIds += "accessibility"
             }
             if (app.packageName in notificationListenerPackages) {
                 reasons += "Accès aux notifications activé"
-                score += 3
+                signalIds += "notification_listener"
             }
             if (app.packageName in deviceAdminPackages) {
                 reasons += "Administrateur de l'appareil actif"
-                score += 4
+                signalIds += "device_admin"
             }
 
             val installer = try { pm.getInstallerPackageName(app.packageName) } catch (_: Exception) { null }
             if (installer == null && !isSystem) {
                 reasons += "Source d'installation non identifiée — vérifier l'origine"
-                score += 1
+                signalIds += "unknown_installer"
             }
             if ((app.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0) {
                 reasons += "Application marquée comme déboguable"
-                score += 2
+                signalIds += "debuggable"
             }
 
             // Keep ordinary system apps out of the list unless a privileged access is enabled.
@@ -114,11 +128,13 @@ object SpywareScanner {
                 app.packageName in notificationListenerPackages ||
                 app.packageName in deviceAdminPackages
             if (isSystem && !privilegedAccess) return@mapNotNull null
-            if (score < 3) return@mapNotNull null
+            val assessment = ThreatAssessmentEngine.assess(signalIds)
+            if (assessment.score < 15) return@mapNotNull null
+            reasons += assessment.reasons
 
             val label = try { pm.getApplicationLabel(app).toString() }
                 catch (_: Exception) { app.packageName }
-            AppRisk(label, app.packageName, score, reasons.distinct(), isSystem)
+            AppRisk(label, app.packageName, assessment.score, assessment.level, reasons.distinct(), isSystem)
         }.sortedByDescending { it.score }
 
         return SecurityReport(
