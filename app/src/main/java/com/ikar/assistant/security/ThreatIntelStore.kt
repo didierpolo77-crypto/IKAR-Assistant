@@ -21,6 +21,7 @@ object ThreatIntelStore {
     private const val KEY_ALIAS = "ikar_urlhaus_auth_key_v1"
     private const val ENCRYPTED_KEY = "encrypted_auth_key"
     private const val URLS = "active_malware_urls"
+    private const val HASHES = "known_payload_sha256"
     private const val UPDATED_AT = "updated_at"
     private const val COUNT = "indicator_count"
 
@@ -64,6 +65,34 @@ object ThreatIntelStore {
             .putInt(COUNT, normalized.size)
             .apply()
     }
+
+    fun replaceKnownSha256(context: Context, hashes: Set<String>) {
+        val normalized = hashes.asSequence()
+            .map { it.trim().lowercase() }
+            .filter { it.matches(Regex("[a-f0-9]{64}")) }
+            .distinct().take(5000).toList()
+        val array = JSONArray()
+        normalized.forEach(array::put)
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .putString(HASHES, array.toString())
+            .putInt("hash_count", normalized.size)
+            .apply()
+    }
+
+    fun isKnownSha256(context: Context, sha256: String): Boolean {
+        val normalized = sha256.trim().lowercase()
+        if (!normalized.matches(Regex("[a-f0-9]{64}"))) return false
+        val stored = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(HASHES, null)
+            ?: return false
+        val candidates = runCatching { JSONArray(stored) }.getOrNull() ?: return false
+        for (i in 0 until candidates.length()) {
+            if (candidates.optString(i).equals(normalized, ignoreCase = true)) return true
+        }
+        return false
+    }
+
+    fun hashCount(context: Context): Int =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getInt("hash_count", 0)
 
     fun isKnownMalicious(context: Context, rawUrl: String): Boolean {
         val stored = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(URLS, null)
