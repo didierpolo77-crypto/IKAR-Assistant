@@ -298,6 +298,9 @@ private fun IkarHome(
     var firewallRunning by remember { mutableStateOf(context.getSharedPreferences("ikar_security_center", android.content.Context.MODE_PRIVATE).getBoolean("dns_firewall_running", false)) }
     var observedMediaChanges by remember { mutableIntStateOf(SharedStorageBehaviorMonitor.recentChangeCount(context)) }
     var observedInstallCount by remember { mutableIntStateOf(SharedStorageBehaviorMonitor.recentInstallCount(context)) }
+    var notificationsSeen by remember { mutableIntStateOf(context.getSharedPreferences("ikar_notification_privacy", android.content.Context.MODE_PRIVATE).getInt("notifications_seen", 0)) }
+    var sensitiveNotifications by remember { mutableIntStateOf(context.getSharedPreferences("ikar_notification_privacy", android.content.Context.MODE_PRIVATE).getInt("sensitive_count", 0)) }
+    var lastNotificationCategory by remember { mutableStateOf(context.getSharedPreferences("ikar_notification_privacy", android.content.Context.MODE_PRIVATE).getString("last_category", "Aucune") ?: "Aucune") }
 
     DisposableEffect(Unit) {
         onDispose {
@@ -434,6 +437,10 @@ private fun IkarHome(
         while (true) {
             observedMediaChanges = SharedStorageBehaviorMonitor.recentChangeCount(context)
             observedInstallCount = SharedStorageBehaviorMonitor.recentInstallCount(context)
+            val notificationPrefs = context.getSharedPreferences("ikar_notification_privacy", android.content.Context.MODE_PRIVATE)
+            notificationsSeen = notificationPrefs.getInt("notifications_seen", 0)
+            sensitiveNotifications = notificationPrefs.getInt("sensitive_count", 0)
+            lastNotificationCategory = notificationPrefs.getString("last_category", "Aucune") ?: "Aucune"
             threatIntelCount = ThreatIntelStore.indicatorCount(context)
             threatIntelStatus = ThreatIntelStore.updateStatus(context)
             firewallRunning = context.getSharedPreferences("ikar_security_center", android.content.Context.MODE_PRIVATE)
@@ -753,6 +760,7 @@ private fun IkarHome(
                 }
                 Text("Fréquence minimale Android : 15 minutes, mais le système peut retarder les contrôles pour économiser la batterie. IKAR compare les ajouts, modifications et suppressions ; il ne peut pas restaurer automatiquement les fichiers.", style = MaterialTheme.typography.bodySmall)
                 Text("Observation locale : $observedMediaChanges changement(s) MediaStore pendant la dernière minute ; $observedInstallCount installation(s) ou mise(s) à jour d'applications pendant les dix dernières minutes. IKAR combine ces événements avec les permissions accordées, les accès spéciaux, les notifications autorisées et les audits de dossiers. Observation MediaStore active uniquement quand IKAR est ouvert.", style = MaterialTheme.typography.bodySmall)
+                Text("Notifications traitées localement : $notificationsSeen · sensibles (codes/finance) : $sensitiveNotifications · dernière catégorie : $lastNotificationCategory. Le texte des notifications n'est pas conservé.", style = MaterialTheme.typography.bodySmall)
                 if (SharedStorageBehaviorMonitor.recentBurstDetected(context)) {
                     Text("Attention : une rafale de changements a été observée récemment dans les médias partagés. Lance un audit du dossier choisi.", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                 }
