@@ -3,6 +3,7 @@ package com.ikar.assistant.security
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
+import android.app.admin.DevicePolicyManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -10,14 +11,15 @@ import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
+import android.provider.Settings
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 
 /**
  * Event-driven guard for newly installed or updated packages.
- * It inspects declared permissions and basic package metadata only;
- * it is a heuristic alert, not a malware verdict or process monitor.
+ * It correlates package permissions with Android-visible special access.
+ * Heuristic only: it cannot inspect app runtime behavior or prove infection.
  */
 class AppInstallGuardReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
@@ -46,40 +48,73 @@ class AppInstallGuardReceiver : BroadcastReceiver() {
 
         val appInfo = info.applicationInfo ?: return
         val requested = info.requestedPermissions.orEmpty().toSet()
+        val signals = mutableSetOf<String>()
         val indicators = mutableListOf<String>()
-        var score = 0
 
-        val rules = listOf(
-            "android.permission.READ_SMS" to (3 to "lecture des SMS"),
-            "android.permission.SEND_SMS" to (3 to "envoi de SMS"),
-            "android.permission.RECEIVE_SMS" to (2 to "réception des SMS"),
-            "android.permission.READ_CALL_LOG" to (2 to "lecture du journal d'appels"),
-            "android.permission.ACCESS_BACKGROUND_LOCATION" to (2 to "localisation en arrière-plan"),
-            "android.permission.RECORD_AUDIO" to (1 to "microphone"),
-            "android.permission.CAMERA" to (1 to "caméra"),
-            "android.permission.READ_CONTACTS" to (1 to "contacts"),
-            "android.permission.REQUEST_INSTALL_PACKAGES" to (2 to "installation d'autres applications")
-        )
-        rules.forEach { (permission, rule) ->
-            if (permission in requested) {
-                score += rule.first
-                indicators += rule.second
-            }
+        if (requested.any { it in setOf(
+                "android.permission.READ_SMS",
+                "android.permission.RECEIVE_SMS",
+                "android.permission.SEND_SMS"
+            ) }) {
+            signals += "sms_access"
+            indicators += "permissions SMS déclarées"
+        }
+        if ("android.permission.RECORD_AUDIO" in requested) {
+            signals += "microphone"
+            indicators += "microphone demandé"
+        }
+        if ("android.permission.CAMERA" in requested) {
+            signals += "camera"
+            indicators += "caméra demandée"
+        }
+        if ("android.permission.ACCESS_BACKGROUND_LOCATION" in requested) {
+            signals += "background_location"
+            indicators += "localisation en arrière-plan demandée"
+        }
+        if ("android.permission.READ_CALL_LOG" in requested) {
+            signals += "call_log"
+            indicators += "journal d'appels demandé"
+        }
+        if ("android.permission.READ_CONTACTS" in requested) {
+            signals += "contacts"
+            indicators += "contacts demandés"
         }
 
-        if ((appInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0) {
-            score += 2
-            indicators += "application déboguable"
+        fun packageHasEnabledComponent(setting: String): Boolean =
+            Settings.Secure.getString(context.contentResolver, setting).orEmpty()
+                .split(':')
+                .any { it.substringBefore('/').equals(packageName, ignoreCase = true) }
+
+        if (packageHasEnabledComponent(Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES)) {
+            signals += "accessibility"
+            indicators += "service d'accessibilité activé"
         }
+        if (packageHasEnabledComponent("enabled_notification_listeners")) {
+            signals += "notification_listener"
+            indicators += "accès aux notifications activé"
+        }
+        val activeAdmins = try {
+            (context.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager)
+                .activeAdmins.orEmpty().any { it.packageName == packageName }
+        } catch (_: Exception) { false }
+        if (activeAdmins) {
+            signals += "device_admin"
+            indicators += "administrateur de l'appareil actif"
+        }
+
         val installer = try { pm.getInstallerPackageName(packageName) } catch (_: Exception) { null }
         val isSystem = (appInfo.flags and ApplicationInfo.FLAG_SYSTEM) != 0
         if (installer == null && !isSystem) {
-            score += 1
+            signals += "unknown_installer"
             indicators += "source d'installation non identifiée"
         }
+        if ((appInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0) {
+            signals += "debuggable"
+            indicators += "application déboguable"
+        }
 
-        // Only combinations with several meaningful signals trigger an alert.
-        if (score < 6) return
+        val assessment = ThreatAssessmentEngine.assess(signals)
+        if (assessment.score < 25) return
 
         val label = try { pm.getApplicationLabel(appInfo).toString() } catch (_: Exception) { packageName }
         val channelId = "ikar_threat_alerts"
@@ -104,12 +139,13 @@ class AppInstallGuardReceiver : BroadcastReceiver() {
             context, packageName.hashCode(), detailsIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= 23) PendingIntent.FLAG_IMMUTABLE else 0)
         )
+        val explanation = (indicators + assessment.reasons).distinct().joinToString(" · ")
         val notification = NotificationCompat.Builder(context, channelId)
             .setSmallIcon(android.R.drawable.ic_dialog_alert)
             .setContentTitle("IKAR : application à examiner")
-            .setContentText("$label présente plusieurs indicateurs sensibles.")
+            .setContentText("$label — risque ${assessment.level} (${assessment.score}/100)")
             .setStyle(NotificationCompat.BigTextStyle().bigText(
-                "$label — ${indicators.distinct().joinToString(", ")}. Ces indices ne prouvent pas une infection. Vérifie l'application et sa provenance."
+                "$label — $explanation. Ces indices ne prouvent pas une infection. Vérifie l'application et sa provenance."
             ))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
