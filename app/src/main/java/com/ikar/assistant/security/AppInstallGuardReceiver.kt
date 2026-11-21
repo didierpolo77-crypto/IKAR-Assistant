@@ -51,7 +51,7 @@ class AppInstallGuardReceiver : BroadcastReceiver() {
         val requested = info.requestedPermissions.orEmpty()
         val permissionFlags = info.requestedPermissionsFlags ?: intArrayOf()
         val granted = requested.filterIndexed { index, _ ->
-            ((permissionFlags.getOrNull(index) ?: 0) and PackageManager.REQUESTED_PERMISSION_GRANTED) != 0
+            ((permissionFlags.getOrNull(index) ?: 0) and android.content.pm.PackageInfo.REQUESTED_PERMISSION_GRANTED) != 0
         }.toSet()
         val signals = mutableSetOf<String>()
         val indicators = mutableListOf<String>()
