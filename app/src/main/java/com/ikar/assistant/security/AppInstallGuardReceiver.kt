@@ -56,6 +56,11 @@ class AppInstallGuardReceiver : BroadcastReceiver() {
         val signals = mutableSetOf<String>()
         val indicators = mutableListOf<String>()
 
+        if (SharedStorageBehaviorMonitor.recentInstallCount(context) >= 3) {
+            signals += "recent_install_burst"
+            indicators += "plusieurs installations ou mises à jour dans les dix dernières minutes"
+        }
+
         if (granted.any { it in setOf(
                 "android.permission.READ_SMS",
                 "android.permission.RECEIVE_SMS",
