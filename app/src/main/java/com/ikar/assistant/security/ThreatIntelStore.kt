@@ -76,8 +76,8 @@ object ThreatIntelStore {
             if (known.equals(rawUrl.trim(), ignoreCase = true)) return true
             val knownUri = runCatching { URI(known) }.getOrNull() ?: continue
             val knownHost = knownUri.host?.lowercase()
-            val rootDomainIndicator = knownUri.rawPath.isNullOrBlank() ||
-                knownUri.rawPath == "/" && knownUri.rawQuery.isNullOrBlank()
+            val rootDomainIndicator = (knownUri.rawPath.isNullOrBlank() || knownUri.rawPath == "/") &&
+                knownUri.rawQuery.isNullOrBlank()
             if (rootDomainIndicator && knownHost != null && knownHost == host) return true
         }
         return false
@@ -104,6 +104,17 @@ object ThreatIntelStore {
 
     fun indicatorCount(context: Context): Int =
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getInt(COUNT, 0)
+
+    fun setUpdateStatus(context: Context, status: String) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .putString("update_status", status.take(160))
+            .putLong("last_attempt_at", System.currentTimeMillis())
+            .apply()
+    }
+
+    fun updateStatus(context: Context): String =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getString("update_status", "Aucune mise à jour effectuée.") ?: "Aucune mise à jour effectuée."
 
     private fun getOrCreateSecretKey(): SecretKey {
         val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
