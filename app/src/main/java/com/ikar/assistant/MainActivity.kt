@@ -91,6 +91,7 @@ import com.ikar.assistant.productivity.ReminderWorker
 import com.ikar.assistant.security.FolderAuditScheduler
 import com.ikar.assistant.diagnostics.BatteryTestPanel
 import com.ikar.assistant.diagnostics.RuntimeDiagnostics
+import com.ikar.assistant.diagnostics.SystemAccessCenter
 
 private const val CHANNEL_ID = "ikar_general"
 
@@ -630,6 +631,8 @@ private fun IkarHome(
         }
 
         BatteryTestPanel()
+
+        SystemAccessCenter()
 
         Card(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
