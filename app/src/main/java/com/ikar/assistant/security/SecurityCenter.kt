@@ -42,7 +42,7 @@ object SecurityCenter {
         if (!parsed.scheme.equals("https", true)) reasons += "Connexion HTTP non chiffrée."
         if (unicodeHost != asciiHost) reasons += "Nom de domaine internationalisé : vérifie attentivement les caractères."
         if (asciiHost.startsWith("xn--") || asciiHost.contains(".xn--")) reasons += "Nom de domaine punycode pouvant masquer des caractères ressemblants."
-        val ipv4 = asciiHost.matches(Regex("""^\\d{1,3}(\\.\\d{1,3}){3}$"""))
+        val ipv4 = asciiHost.matches(Regex("""^\d{1,3}(\.\d{1,3}){3}$"""))
         if (ipv4) {
             reasons += "Lien utilisant directement une adresse IP plutôt qu'un nom de domaine."
             val octets = asciiHost.split('.').mapNotNull { it.toIntOrNull() }
