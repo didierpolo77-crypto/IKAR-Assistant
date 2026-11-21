@@ -435,6 +435,8 @@ private fun IkarHome(
             observedMediaChanges = SharedStorageBehaviorMonitor.recentChangeCount(context)
             observedInstallCount = SharedStorageBehaviorMonitor.recentInstallCount(context)
             threatIntelCount = ThreatIntelStore.indicatorCount(context)
+            firewallRunning = context.getSharedPreferences("ikar_security_center", android.content.Context.MODE_PRIVATE)
+                .getBoolean("dns_firewall_running", false)
             kotlinx.coroutines.delay(5000)
         }
     }
