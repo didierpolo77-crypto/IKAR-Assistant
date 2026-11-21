@@ -11,6 +11,8 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.ExistingWorkPolicy
+import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.CoroutineWorker
@@ -27,6 +29,15 @@ object FolderAuditScheduler {
         WorkManager.getInstance(context).enqueueUniquePeriodicWork(
             UNIQUE_WORK,
             ExistingPeriodicWorkPolicy.KEEP,
+            request
+        )
+    }
+
+    fun runNow(context: Context) {
+        val request = OneTimeWorkRequestBuilder<FolderAuditWorker>().build()
+        WorkManager.getInstance(context).enqueueUniqueWork(
+            "ikar_authorized_folder_audit_event",
+            ExistingWorkPolicy.KEEP,
             request
         )
     }
