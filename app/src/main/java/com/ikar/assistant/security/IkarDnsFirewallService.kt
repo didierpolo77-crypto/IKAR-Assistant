@@ -92,8 +92,12 @@ class IkarDnsFirewallService : VpnService() {
         if (udpLength < 20 || ipHeaderLength + udpLength > length) return null
         val dnsOffset = ipHeaderLength + 8
         val dns = packet.copyOfRange(dnsOffset, ipHeaderLength + udpLength)
-        val host = readQuestionHost(dns)
-        val blocked = host != null && ThreatIntelStore.isKnownMaliciousHost(this, host)
+        if (dns.size < 17 || dns.size > 4096) return null
+        val dnsFlags = u16(dns, 2)
+        // Accept only ordinary one-question DNS queries; reject responses, opcodes and malformed packets.
+        if ((dnsFlags and 0x8000) != 0 || ((dnsFlags ushr 11) and 0x0f) != 0 || u16(dns, 4) != 1) return null
+        val host = readQuestionHost(dns) ?: return null
+        val blocked = ThreatIntelStore.isKnownMaliciousHost(this, host)
         val responseDns = if (blocked) makeNxdomain(dns) else forwardDns(dns) ?: return null
         return buildIpv4UdpResponse(
             sourceIp = destinationIp,
@@ -115,7 +119,10 @@ class IkarDnsFirewallService : VpnService() {
             val buffer = ByteArray(4096)
             val response = DatagramPacket(buffer, buffer.size)
             socket.receive(response)
-            buffer.copyOf(response.length)
+            val received = buffer.copyOf(response.length)
+            if (received.size < 12 || received[0] != query[0] || received[1] != query[1]) return null
+            if ((u16(received, 2) and 0x8000) == 0) return null
+            received
         } catch (_: SocketTimeoutException) {
             null
         } catch (_: Exception) {
@@ -137,7 +144,10 @@ class IkarDnsFirewallService : VpnService() {
             offset += size
             if (labels.size > 32) return null
         }
-        if (labels.isEmpty()) return null
+        if (labels.isEmpty() || offset + 4 > dns.size) return null
+        val queryType = u16(dns, offset)
+        val queryClass = u16(dns, offset + 2)
+        if (queryType == 0 || queryClass != 1) return null
         return labels.joinToString(".").lowercase()
     }
 
