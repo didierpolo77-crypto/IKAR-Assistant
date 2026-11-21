@@ -549,6 +549,12 @@ private fun IkarHome(
                     Text("Taille : ${report.sizeBytes / 1024} Ko · SHA-256 :", style = MaterialTheme.typography.bodySmall)
                     Text(report.sha256, style = MaterialTheme.typography.bodySmall)
                     if (report.packageName != null) Text("Paquet APK : ${report.packageName}")
+                    report.apkVersionName?.let { Text("Version déclarée : $it (code ${report.apkVersionCode ?: "inconnu"})", style = MaterialTheme.typography.bodySmall) }
+                    report.targetSdk?.let { Text("Niveau Android ciblé par l'APK : $it", style = MaterialTheme.typography.bodySmall) }
+                    report.certificateSha256?.let {
+                        Text("Empreinte SHA-256 du certificat de signature :", style = MaterialTheme.typography.bodySmall)
+                        Text(it, style = MaterialTheme.typography.bodySmall)
+                    }
                     report.updateAssessment?.let { Text("Compatibilité de mise à jour : $it", style = MaterialTheme.typography.bodySmall) }
                     if (report.indicators.isEmpty()) {
                         Text("Aucun indicateur détecté par les règles locales actuelles.")
