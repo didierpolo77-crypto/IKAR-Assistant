@@ -14,6 +14,10 @@ data class FileScanReport(
     val isApk: Boolean,
     val packageName: String?,
     val requestedSensitivePermissions: List<String>,
+    val apkVersionName: String? = null,
+    val apkVersionCode: Long? = null,
+    val targetSdk: Int? = null,
+    val certificateSha256: String? = null,
     val indicators: List<String>,
     val verdict: String,
     val updateAssessment: String? = null
@@ -82,12 +86,33 @@ object FileScanner {
                 @Suppress("DEPRECATION")
                 val info = context.packageManager.getPackageArchiveInfo(
                     temp.absolutePath,
-                    PackageManager.GET_PERMISSIONS or PackageManager.GET_META_DATA
+                    PackageManager.GET_PERMISSIONS or PackageManager.GET_META_DATA or
+                        (if (android.os.Build.VERSION.SDK_INT >= 28) PackageManager.GET_SIGNING_CERTIFICATES else PackageManager.GET_SIGNATURES)
                 )
+                var apkVersionName: String? = null
+                var apkVersionCode: Long? = null
+                var targetSdk: Int? = null
+                var certificateSha256: String? = null
                 if (info == null) {
                     indicators += "Android n'a pas pu lire le manifeste de cet APK."
                 } else {
                     packageName = info.packageName
+                    apkVersionName = info.versionName
+                    apkVersionCode = if (android.os.Build.VERSION.SDK_INT >= 28) info.longVersionCode else info.versionCode.toLong()
+                    targetSdk = info.applicationInfo?.targetSdkVersion
+                    val apkSignatures = if (android.os.Build.VERSION.SDK_INT >= 28) {
+                        info.signingInfo?.apkContentsSigners?.toList().orEmpty()
+                    } else {
+                        @Suppress("DEPRECATION")
+                        info.signatures?.toList().orEmpty()
+                    }
+                    certificateSha256 = apkSignatures.firstOrNull()?.let { signature ->
+                        MessageDigest.getInstance("SHA-256").digest(signature.toByteArray())
+                            .joinToString("") { "%02x".format(it) }
+                    }
+                    if (certificateSha256 == null) {
+                        indicators += "Certificat de signature APK absent ou illisible."
+                    }
                     info.requestedPermissions.orEmpty().forEach { permission ->
                         sensitivePermissions[permission]?.let { sensitive += it }
                     }
@@ -123,6 +148,10 @@ object FileScanner {
                 isApk = isApk,
                 packageName = packageName,
                 requestedSensitivePermissions = sensitive.distinct(),
+                apkVersionName = if (isApk) apkVersionName else null,
+                apkVersionCode = if (isApk) apkVersionCode else null,
+                targetSdk = if (isApk) targetSdk else null,
+                certificateSha256 = if (isApk) certificateSha256 else null,
                 indicators = indicators,
                 verdict = verdict,
                 updateAssessment = updateAssessment
