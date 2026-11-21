@@ -49,9 +49,9 @@ class FolderAuditWorker(
 
         return try {
             val report = SecurityCenter.auditFolder(applicationContext, uri)
-            val alert = report.changed >= 20 || report.suspiciousNames.isNotEmpty()
+            val alert = report.alert
             if (alert) {
-                val message = "Changements importants : ${report.changed}. Fichiers suspects : ${report.suspiciousNames.size}. Vérifie le dossier."
+                val message = "Ajouts : ${report.added}, modifications : ${report.modified}, suppressions : ${report.removed}. Fichiers à extension suspecte : ${report.suspiciousNames.size}. Vérifie le dossier et tes sauvegardes."
                 MemoryDatabase.getInstance(applicationContext).memoryDao().insert(
                     MemoryEntry(type = "SECURITY_EVENT", content = "Alerte anti-ransomware en arrière-plan — $message")
                 )
