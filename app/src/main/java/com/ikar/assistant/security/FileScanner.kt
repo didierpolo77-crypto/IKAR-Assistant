@@ -70,6 +70,10 @@ object FileScanner {
 
             val hash = digest.digest().joinToString("") { "%02x".format(it) }
             val indicators = mutableListOf<String>()
+            val knownPayloadIndicator = ThreatIntelStore.isKnownSha256(context, hash)
+            if (knownPayloadIndicator) {
+                indicators += "Empreinte SHA-256 présente dans le flux URLhaus de payloads collectés : indicateur à examiner, pas preuve suffisante d'infection."
+            }
             val apkByName = name.endsWith(".apk", ignoreCase = true)
             val header = ByteArray(4)
             temp.inputStream().use { it.read(header) }
@@ -134,6 +138,7 @@ object FileScanner {
             val verdict = when {
                 indicators.any { it.contains("signature ZIP absente") || it.contains("n'a pas pu lire") || it.contains("pas été reconnu") } ->
                     "Fichier invalide ou non vérifiable"
+                knownPayloadIndicator -> "Correspondance avec un indicateur URLhaus — vérification recommandée"
                 indicators.isNotEmpty() -> "Vérification recommandée"
                 else -> "Aucun indicateur suspect détecté par les règles locales"
             }
