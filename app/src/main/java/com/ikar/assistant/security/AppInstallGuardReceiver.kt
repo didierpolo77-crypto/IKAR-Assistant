@@ -32,6 +32,7 @@ class AppInstallGuardReceiver : BroadcastReceiver() {
 
         val packageName = intent.data?.schemeSpecificPart ?: return
         if (packageName == context.packageName) return
+        SharedStorageBehaviorMonitor.recordPackageInstall(context)
 
         val pm = context.packageManager
         val info = try {
@@ -47,37 +48,41 @@ class AppInstallGuardReceiver : BroadcastReceiver() {
         }
 
         val appInfo = info.applicationInfo ?: return
-        val requested = info.requestedPermissions.orEmpty().toSet()
+        val requested = info.requestedPermissions.orEmpty()
+        val permissionFlags = info.requestedPermissionsFlags ?: intArrayOf()
+        val granted = requested.filterIndexed { index, _ ->
+            (permissionFlags.getOrNull(index) ?: 0) and PackageManager.REQUESTED_PERMISSION_GRANTED != 0
+        }.toSet()
         val signals = mutableSetOf<String>()
         val indicators = mutableListOf<String>()
 
-        if (requested.any { it in setOf(
+        if (granted.any { it in setOf(
                 "android.permission.READ_SMS",
                 "android.permission.RECEIVE_SMS",
                 "android.permission.SEND_SMS"
             ) }) {
             signals += "sms_access"
-            indicators += "permissions SMS déclarées"
+            indicators += "autorisations SMS accordées"
         }
-        if ("android.permission.RECORD_AUDIO" in requested) {
+        if ("android.permission.RECORD_AUDIO" in granted) {
             signals += "microphone"
-            indicators += "microphone demandé"
+            indicators += "autorisation microphone accordée"
         }
-        if ("android.permission.CAMERA" in requested) {
+        if ("android.permission.CAMERA" in granted) {
             signals += "camera"
-            indicators += "caméra demandée"
+            indicators += "autorisation caméra accordée"
         }
-        if ("android.permission.ACCESS_BACKGROUND_LOCATION" in requested) {
+        if ("android.permission.ACCESS_BACKGROUND_LOCATION" in granted) {
             signals += "background_location"
-            indicators += "localisation en arrière-plan demandée"
+            indicators += "autorisation de localisation en arrière-plan accordée"
         }
-        if ("android.permission.READ_CALL_LOG" in requested) {
+        if ("android.permission.READ_CALL_LOG" in granted) {
             signals += "call_log"
-            indicators += "journal d'appels demandé"
+            indicators += "autorisation journal d'appels accordée"
         }
-        if ("android.permission.READ_CONTACTS" in requested) {
+        if ("android.permission.READ_CONTACTS" in granted) {
             signals += "contacts"
-            indicators += "contacts demandés"
+            indicators += "autorisation contacts accordée"
         }
 
         fun packageHasEnabledComponent(setting: String): Boolean =
