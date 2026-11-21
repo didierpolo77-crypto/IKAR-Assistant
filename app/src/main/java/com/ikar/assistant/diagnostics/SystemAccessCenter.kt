@@ -35,20 +35,31 @@ import androidx.compose.runtime.setValue
 @Composable
 fun SystemAccessCenter() {
     val context = LocalContext.current
-    val microphone = ContextCompat.checkSelfPermission(
-        context, Manifest.permission.RECORD_AUDIO
-    ) == PackageManager.PERMISSION_GRANTED
-    val notifications = Build.VERSION.SDK_INT < 33 ||
-        ContextCompat.checkSelfPermission(
-            context, Manifest.permission.POST_NOTIFICATIONS
-        ) == PackageManager.PERMISSION_GRANTED
-    val overlay = Settings.canDrawOverlays(context)
+    var microphone by remember { mutableStateOf(false) }
+    var notifications by remember { mutableStateOf(false) }
+    var overlay by remember { mutableStateOf(false) }
+    var batteryExemption by remember { mutableStateOf(false) }
     val powerManager = context.getSystemService(Context.POWER_SERVICE) as PowerManager
-    val batteryExemption = powerManager.isIgnoringBatteryOptimizations(context.packageName)
     var listenerEnabled by remember { mutableStateOf(NotificationManagerCompat.getEnabledListenerPackages(context).contains(context.packageName)) }
     val notificationPrefs = remember { context.getSharedPreferences("ikar_notification_privacy", Context.MODE_PRIVATE) }
     var seenCount by remember { mutableStateOf(notificationPrefs.getInt("notifications_seen", 0)) }
     var sensitiveCount by remember { mutableStateOf(notificationPrefs.getInt("sensitive_count", 0)) }
+
+    fun refreshAccessState() {
+        microphone = ContextCompat.checkSelfPermission(
+            context, Manifest.permission.RECORD_AUDIO
+        ) == PackageManager.PERMISSION_GRANTED
+        notifications = Build.VERSION.SDK_INT < 33 ||
+            ContextCompat.checkSelfPermission(
+                context, Manifest.permission.POST_NOTIFICATIONS
+            ) == PackageManager.PERMISSION_GRANTED
+        overlay = Settings.canDrawOverlays(context)
+        batteryExemption = powerManager.isIgnoringBatteryOptimizations(context.packageName)
+        listenerEnabled = NotificationManagerCompat.getEnabledListenerPackages(context).contains(context.packageName)
+        seenCount = notificationPrefs.getInt("notifications_seen", 0)
+        sensitiveCount = notificationPrefs.getInt("sensitive_count", 0)
+    }
+    androidx.compose.runtime.LaunchedEffect(Unit) { refreshAccessState() }
 
     fun openSettings(action: String, packageSpecific: Boolean = false) {
         val intent = if (packageSpecific) {
@@ -88,11 +99,7 @@ fun SystemAccessCenter() {
                     modifier = Modifier.weight(1f)
                 ) { Text("Accès notifications") }
                 Button(
-                    onClick = {
-                        listenerEnabled = NotificationManagerCompat.getEnabledListenerPackages(context).contains(context.packageName)
-                        seenCount = notificationPrefs.getInt("notifications_seen", 0)
-                        sensitiveCount = notificationPrefs.getInt("sensitive_count", 0)
-                    },
+                    onClick = { refreshAccessState() },
                     modifier = Modifier.weight(1f)
                 ) { Text("Actualiser l'état") }
             }
