@@ -291,7 +291,7 @@ private fun IkarHome(
             recognizerState.value?.destroy()
             recognizerState.value = recognizer
             recognizer.setRecognitionListener(object : RecognitionListener {
-                override fun onReadyForSpeech(params: Bundle?) { listening = true }
+                override fun onReadyForSpeech(params: Bundle?) { listening = true; memoryError = null }
                 override fun onBeginningOfSpeech() { listening = true }
                 override fun onRmsChanged(rmsdB: Float) {}
                 override fun onBufferReceived(buffer: ByteArray?) {}
@@ -312,6 +312,14 @@ private fun IkarHome(
                             "Le service vocal n'a pas réussi à joindre son réseau. Vérifie Internet ou active un pack vocal hors connexion."
                         SpeechRecognizer.ERROR_AUDIO ->
                             "Le microphone n'a pas pu être utilisé. Vérifie son autorisation et qu'aucune autre application ne l'occupe."
+                        SpeechRecognizer.ERROR_CLIENT ->
+                            "Le service vocal Android a interrompu la session. Ferme puis relance l'écoute."
+                        SpeechRecognizer.ERROR_RECOGNIZER_BUSY ->
+                            "Le moteur vocal est déjà occupé. Attends quelques secondes puis réessaie."
+                        SpeechRecognizer.ERROR_SERVER, SpeechRecognizer.ERROR_SERVER_DISCONNECTED ->
+                            "Le moteur de reconnaissance ne répond pas. Vérifie le réseau ou réessaie avec le service vocal Android."
+                        SpeechRecognizer.ERROR_TOO_MANY_REQUESTS ->
+                            "Trop de demandes vocales rapprochées. Attends un instant avant de réessayer."
                         SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS ->
                             "L'autorisation du microphone est nécessaire pour la reconnaissance vocale."
                         SpeechRecognizer.ERROR_NO_MATCH, SpeechRecognizer.ERROR_SPEECH_TIMEOUT ->
@@ -322,7 +330,12 @@ private fun IkarHome(
                 override fun onResults(results: Bundle?) {
                     listening = false
                     val spoken = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()
-                    if (!spoken.isNullOrBlank()) chatInput = spoken
+                    if (!spoken.isNullOrBlank()) {
+                        chatInput = spoken
+                        memoryError = null
+                    } else {
+                        memoryError = "Aucune phrase reconnue. Parle distinctement puis réessaie."
+                    }
                     recognizer.destroy()
                     recognizerState.value = null
                 }
@@ -332,13 +345,15 @@ private fun IkarHome(
             val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE, languageTag)
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, languageTag)
+                putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
                 // Ne force pas un moteur hors ligne qui peut ne pas avoir le pack français.
                 putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, false)
                 putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false)
             }
             recognizer.startListening(intent)
-            listening = true
-            memoryError = null
+            listening = false
+            memoryError = "Initialisation du service vocal…"
         } catch (error: Exception) {
             listening = false
             recognizerState.value?.destroy()
@@ -1152,7 +1167,7 @@ private fun IkarBrandHeader() {
         }
         Column(horizontalAlignment = androidx.compose.ui.Alignment.End) {
             Text("VERSION", style = MaterialTheme.typography.labelSmall, color = Color(0xFF8E9ABD))
-            Text("0.57.0", color = Color(0xFF39E5FF), fontWeight = FontWeight.Bold)
+            Text("0.61.0", color = Color(0xFF39E5FF), fontWeight = FontWeight.Bold)
         }
     }
 }
@@ -1192,7 +1207,7 @@ private fun IkarModuleDashboard(openTasks: Int) {
                     .border(1.dp, Color(0xFF237B87), RoundedCornerShape(50))
                     .padding(horizontal = 11.dp, vertical = 7.dp)
             ) {
-                Text("6 MODULES", color = Color(0xFF65E9F4), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                Text("8 MODULES", color = Color(0xFF65E9F4), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
             }
         }
 
@@ -1234,19 +1249,19 @@ private fun IkarModuleDashboard(openTasks: Int) {
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             IkarModuleTile(
-                symbol = "✎",
-                title = "Notes",
-                detail = "Mémoire et documents locaux",
-                status = "Stockage local",
-                tint = Color(0xFF15533F),
+                symbol = "🌐",
+                title = "Protection Web",
+                detail = "Liens suspects et Safe Browsing",
+                status = "Dans le navigateur IKAR",
+                tint = Color(0xFF145044),
                 modifier = Modifier.weight(1f)
             )
             IkarModuleTile(
-                symbol = "◷",
-                title = "Rappels",
-                detail = "Notifications programmées",
-                status = "Selon Android",
-                tint = Color(0xFF63294F),
+                symbol = "▦",
+                title = "Accès système",
+                detail = "Autorisations et événements autorisés",
+                status = "Selon le consentement Android",
+                tint = Color(0xFF17436A),
                 modifier = Modifier.weight(1f)
             )
         }
