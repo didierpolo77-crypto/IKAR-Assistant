@@ -30,7 +30,7 @@ class IkarNotificationListener : NotificationListenerService() {
             .putInt("notifications_seen", prefs.getInt("notifications_seen", 0) + 1)
             .putInt(
                 "sensitive_count",
-                prefs.getInt("sensitive_count", 0) + if (classification == "Sensible — contenu non conservé") 1 else 0
+                prefs.getInt("sensitive_count", 0) + if (classification != "Notification ordinaire — contenu non conservé") 1 else 0
             )
             .apply()
     }
