@@ -35,15 +35,38 @@ object SecurityCenter {
         }
 
         val host = parsed.host.lowercase(Locale.ROOT).trimEnd('.')
-        val asciiHost = runCatching { java.net.IDN.toASCII(host) }.getOrDefault(host)
-        val unicodeHost = runCatching { java.net.IDN.toUnicode(host) }.getOrDefault(host)
+        val asciiHost = runCatching {
+            java.net.IDN.toASCII(host, java.net.IDN.USE_STD3_ASCII_RULES).lowercase(Locale.ROOT)
+        }.getOrDefault(host)
+        val unicodeHost = runCatching { java.net.IDN.toUnicode(asciiHost) }.getOrDefault(host)
         if (!parsed.scheme.equals("https", true)) reasons += "Connexion HTTP non chiffrée."
-        if (host != asciiHost || unicodeHost != host) reasons += "Nom de domaine avec caractères internationalisés : vérifie chaque caractère."
+        if (unicodeHost != asciiHost) reasons += "Nom de domaine internationalisé : vérifie attentivement les caractères."
         if (asciiHost.startsWith("xn--") || asciiHost.contains(".xn--")) reasons += "Nom de domaine punycode pouvant masquer des caractères ressemblants."
-        if (asciiHost.matches(Regex("""^\d{1,3}(\.\d{1,3}){3}$"""))) reasons += "Lien utilisant directement une adresse IP."
+        val ipv4 = asciiHost.matches(Regex("""^\\d{1,3}(\\.\\d{1,3}){3}$"""))
+        if (ipv4) {
+            reasons += "Lien utilisant directement une adresse IP plutôt qu'un nom de domaine."
+            val octets = asciiHost.split('.').mapNotNull { it.toIntOrNull() }
+            if (octets.size == 4 && octets.all { it in 0..255 }) {
+                val first = octets[0]
+                val second = octets[1]
+                if (first == 10 || first == 127 || first == 0 ||
+                    (first == 192 && second == 168) ||
+                    (first == 172 && second in 16..31) ||
+                    (first == 169 && second == 254) ||
+                    (first == 100 && second in 64..127)) {
+                    reasons += "Adresse IP privée, locale ou réservée : vérifie que tu connais le réseau ciblé."
+                }
+            } else {
+                reasons += "Adresse IPv4 mal formée."
+            }
+        }
         if (asciiHost.count { it == '.' } >= 4) reasons += "Sous-domaines particulièrement nombreux."
+        if (asciiHost.split('.').any { it.isBlank() || it.length > 63 || it.startsWith('-') || it.endsWith('-') }) {
+            reasons += "Structure du nom de domaine inhabituelle."
+        }
         if (parsed.userInfo != null) reasons += "Le lien contient des informations avant le nom de domaine : technique parfois utilisée pour tromper."
-        if (asciiHost in setOf("bit.ly", "tinyurl.com", "t.co", "is.gd", "cutt.ly", "rb.gy", "tiny.cc")) {
+        if (parsed.port != -1 && parsed.port !in setOf(80, 443)) reasons += "Port réseau non standard : vérifie la destination avant de continuer."
+        if (asciiHost in setOf("bit.ly", "tinyurl.com", "t.co", "is.gd", "cutt.ly", "rb.gy", "tiny.cc", "shorturl.at", "ow.ly")) {
             reasons += "Lien raccourci : la destination réelle est masquée."
         }
         val pathAndQuery = (parsed.rawPath.orEmpty() + "?" + parsed.rawQuery.orEmpty()).lowercase(Locale.ROOT)
@@ -66,8 +89,11 @@ object SecurityCenter {
                 reasons += "Le nom de domaine mentionne $brand sans correspondre à son domaine officiel habituel."
             }
         }
-        val suspiciousTlds = setOf(".zip", ".mov", ".click", ".work", ".support", ".country", ".kim")
+        val suspiciousTlds = setOf(".zip", ".mov", ".click", ".work", ".support", ".country", ".kim", ".top", ".xyz", ".gq", ".tk", ".ml", ".cf", ".ga")
         if (suspiciousTlds.any { asciiHost.endsWith(it) }) reasons += "Extension de domaine parfois utilisée dans des campagnes abusives ; vérification supplémentaire conseillée."
+        val riskyDownload = listOf(".apk", ".exe", ".msi", ".scr", ".bat", ".cmd", ".jar", ".js", ".zip")
+            .any { pathAndQuery.substringBefore('?').endsWith(it) }
+        if (riskyDownload) reasons += "Le lien semble pointer vers un fichier téléchargeable potentiellement exécutable ou compressé."
 
         return LinkRiskReport(value, reasons.isNotEmpty(), reasons.toList())
     }
