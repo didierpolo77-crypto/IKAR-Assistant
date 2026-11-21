@@ -83,19 +83,23 @@ object SpywareScanner {
                     val granted = index >= 0 && ((permissionFlags.getOrNull(index) ?: 0)
                         and android.content.pm.PackageInfo.REQUESTED_PERMISSION_GRANTED) != 0
                     reasons += if (granted) "${rule.label} — autorisation accordée" else rule.label
-                    when (permission) {
-                        Manifest.permission.READ_SMS,
-                        Manifest.permission.RECEIVE_SMS,
-                        Manifest.permission.SEND_SMS -> signalIds += "sms_access"
-                        Manifest.permission.RECORD_AUDIO -> signalIds += "microphone"
-                        Manifest.permission.CAMERA -> signalIds += "camera"
-                        Manifest.permission.ACCESS_FINE_LOCATION -> signalIds += "precise_location"
-                        Manifest.permission.ACCESS_BACKGROUND_LOCATION -> signalIds += "background_location"
-                        Manifest.permission.READ_CONTACTS -> signalIds += "contacts"
-                        Manifest.permission.READ_PHONE_STATE -> signalIds += "phone_state"
-                        Manifest.permission.READ_CALL_LOG -> signalIds += "call_log"
-                        Manifest.permission.READ_EXTERNAL_STORAGE,
-                        Manifest.permission.WRITE_EXTERNAL_STORAGE -> signalIds += "shared_storage"
+                    // A permission merely declared by an APK is not evidence of actual access.
+                    // Only granted dangerous permissions contribute to the risk score.
+                    if (granted) {
+                        when (permission) {
+                            Manifest.permission.READ_SMS,
+                            Manifest.permission.RECEIVE_SMS,
+                            Manifest.permission.SEND_SMS -> signalIds += "sms_access"
+                            Manifest.permission.RECORD_AUDIO -> signalIds += "microphone"
+                            Manifest.permission.CAMERA -> signalIds += "camera"
+                            Manifest.permission.ACCESS_FINE_LOCATION -> signalIds += "precise_location"
+                            Manifest.permission.ACCESS_BACKGROUND_LOCATION -> signalIds += "background_location"
+                            Manifest.permission.READ_CONTACTS -> signalIds += "contacts"
+                            Manifest.permission.READ_PHONE_STATE -> signalIds += "phone_state"
+                            Manifest.permission.READ_CALL_LOG -> signalIds += "call_log"
+                            Manifest.permission.READ_EXTERNAL_STORAGE,
+                            Manifest.permission.WRITE_EXTERNAL_STORAGE -> signalIds += "shared_storage"
+                        }
                     }
                 }
             }
