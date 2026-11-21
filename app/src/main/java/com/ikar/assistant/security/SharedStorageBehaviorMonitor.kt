@@ -68,6 +68,24 @@ object SharedStorageBehaviorMonitor {
         return if (System.currentTimeMillis() - start <= 60_000L) prefs.getInt("change_count", 0) else 0
     }
 
+    fun recordPackageInstall(context: Context) {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val now = System.currentTimeMillis()
+        val start = prefs.getLong("install_window_start", 0L)
+        val count = if (now - start > 10 * 60_000L) 1 else prefs.getInt("install_count", 0) + 1
+        prefs.edit()
+            .putLong("install_window_start", if (now - start > 10 * 60_000L) now else start)
+            .putInt("install_count", count)
+            .putLong("last_install_at", now)
+            .apply()
+    }
+
+    fun recentInstallCount(context: Context): Int {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val start = prefs.getLong("install_window_start", 0L)
+        return if (System.currentTimeMillis() - start <= 10 * 60_000L) prefs.getInt("install_count", 0) else 0
+    }
+
     fun recentBurstDetected(context: Context): Boolean {
         val at = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getLong("burst_detected_at", 0L)
         return at > 0L && System.currentTimeMillis() - at <= 10 * 60_000L
