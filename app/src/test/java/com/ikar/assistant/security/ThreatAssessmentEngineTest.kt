@@ -31,4 +31,20 @@ class ThreatAssessmentEngineTest {
         val result = ThreatAssessmentEngine.assess(setOf("not_a_real_signal"))
         assertEquals(0, result.score)
     }
+    @Test
+    fun accessibilityNotificationsAndSmsProduceStrongerCorrelation() {
+        val result = ThreatAssessmentEngine.assess(
+            setOf("accessibility", "notification_listener", "sms_access")
+        )
+        assertTrue(result.score >= 80)
+        assertTrue(result.reasons.any { it.contains("Corrélation renforcée") })
+    }
+
+    @Test
+    fun accessibilityAndDeviceAdminAreCorrelated() {
+        val result = ThreatAssessmentEngine.assess(setOf("accessibility", "device_admin"))
+        assertTrue(result.score >= 55)
+        assertTrue(result.reasons.any { it.contains("administrateur") })
+    }
+
 }
