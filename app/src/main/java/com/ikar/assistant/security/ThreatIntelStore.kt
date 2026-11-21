@@ -80,6 +80,19 @@ object ThreatIntelStore {
         return false
     }
 
+    fun isKnownMaliciousHost(context: Context, rawHost: String): Boolean {
+        val host = rawHost.trim().trimEnd('.').lowercase()
+        if (host.isBlank()) return false
+        val stored = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(URLS, null)
+            ?: return false
+        val candidates = runCatching { JSONArray(stored) }.getOrNull() ?: return false
+        for (i in 0 until candidates.length()) {
+            val knownHost = runCatching { URI(candidates.optString(i)).host?.lowercase()?.trimEnd('.') }.getOrNull()
+            if (knownHost != null && (host == knownHost || host.endsWith(".$knownHost"))) return true
+        }
+        return false
+    }
+
     fun lastUpdatedAt(context: Context): Long =
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getLong(UPDATED_AT, 0L)
 
