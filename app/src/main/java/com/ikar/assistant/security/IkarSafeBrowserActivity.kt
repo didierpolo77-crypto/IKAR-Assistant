@@ -1,6 +1,7 @@
 package com.ikar.assistant.security
 
 import android.app.Activity
+import android.app.AlertDialog
 import android.annotation.SuppressLint
 import android.graphics.Color
 import android.net.Uri
@@ -153,12 +154,22 @@ class IkarSafeBrowserActivity : Activity() {
         }
         address.setText(normalized)
         val localAssessment = SecurityCenter.checkLink(normalized)
-        status.text = if (localAssessment.suspicious) {
-            "Attention : ${localAssessment.reasons.joinToString(" ")} Contrôle Safe Browsing en complément."
+        if (localAssessment.suspicious) {
+            status.text = "Lien à vérifier · navigation suspendue en attendant ton accord."
+            AlertDialog.Builder(this)
+                .setTitle("Vérification de sécurité")
+                .setMessage(localAssessment.reasons.joinToString("\\n\\n") +
+                    "\\n\\nIKAR ne peut pas confirmer à lui seul qu'un lien est malveillant. Veux-tu quand même l'ouvrir ?")
+                .setNegativeButton("Retour", null)
+                .setPositiveButton("Continuer") { _, _ ->
+                    status.text = "Ouverture avec avertissement · Safe Browsing Android en complément."
+                    browser.loadUrl(normalized)
+                }
+                .show()
         } else {
-            "Aucun signal heuristique local évident · contrôle Safe Browsing en complément."
+            status.text = "Aucun signal heuristique local évident · contrôle Safe Browsing en complément."
+            browser.loadUrl(normalized)
         }
-        browser.loadUrl(normalized)
     }
 
     override fun onBackPressed() {
