@@ -92,8 +92,8 @@ object ThreatIntelStore {
         for (i in 0 until candidates.length()) {
             val knownUri = runCatching { URI(candidates.optString(i)) }.getOrNull() ?: continue
             val knownHost = knownUri.host?.lowercase()?.trimEnd('.')
-            val rootDomainIndicator = knownUri.rawPath.isNullOrBlank() ||
-                knownUri.rawPath == "/" && knownUri.rawQuery.isNullOrBlank()
+            val rootDomainIndicator = (knownUri.rawPath.isNullOrBlank() || knownUri.rawPath == "/") &&
+                knownUri.rawQuery.isNullOrBlank()
             if (rootDomainIndicator && knownHost != null && (host == knownHost || host.endsWith(".$knownHost"))) return true
         }
         return false
