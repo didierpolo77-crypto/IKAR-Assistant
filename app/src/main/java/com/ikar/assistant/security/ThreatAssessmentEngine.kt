@@ -41,6 +41,14 @@ object ThreatAssessmentEngine {
             score += 12
             reasons += "Combinaison à risque : lecture des notifications et accès aux SMS."
         }
+        if ("accessibility" in known && "notification_listener" in known && "sms_access" in known) {
+            score += 18
+            reasons += "Corrélation renforcée : accessibilité, notifications et SMS réunis dans la même application."
+        }
+        if ("accessibility" in known && "device_admin" in known) {
+            score += 15
+            reasons += "Combinaison sensible : service d'accessibilité et administrateur de l'appareil."
+        }
         if ("device_admin" in known && "unknown_installer" in known) {
             score += 8
             reasons += "Combinaison à examiner : administrateur actif et source d'installation inconnue."
@@ -48,6 +56,10 @@ object ThreatAssessmentEngine {
         if ("background_location" in known && ("microphone" in known || "camera" in known)) {
             score += 8
             reasons += "Combinaison à examiner : localisation en arrière-plan et capteurs sensibles."
+        }
+        if ("background_location" in known && "microphone" in known && "camera" in known) {
+            score += 10
+            reasons += "Corrélation renforcée : localisation en arrière-plan et deux capteurs sensibles."
         }
 
         val bounded = score.coerceIn(0, 100)
