@@ -98,6 +98,54 @@ object RenderOnlineModelGateway {
         }
     }
 
+    /**
+     * Sends only app metadata and local heuristic findings for optional AI review.
+     * No APK, file contents, contacts, or personal data are uploaded.
+     * Call from Dispatchers.IO.
+     */
+    fun analyzeSecurity(apiToken: String, finding: com.ikar.assistant.security.AppRisk): String {
+        require(apiToken.isNotBlank()) { "Ajoute le jeton d'accès Render pour utiliser l'analyse IA." }
+        val evidence = JSONObject()
+            .put("app_label", finding.label.take(120))
+            .put("package_name", finding.packageName.take(255))
+            .put("local_score", finding.score.coerceIn(0, 100))
+            .put("local_level", finding.severity.take(30))
+            .put("signals", JSONArray(finding.reasons.take(20)))
+            .put("reasons", JSONArray(finding.reasons.take(20)))
+        val connection = (URL("https://ikar-cloudflare-worker-1.onrender.com/v1/security/analyze")
+            .openConnection() as HttpURLConnection).apply {
+            requestMethod = "POST"
+            connectTimeout = 20_000
+            readTimeout = 65_000
+            doOutput = true
+            setRequestProperty("Authorization", "Bearer $apiToken")
+            setRequestProperty("Content-Type", "application/json; charset=utf-8")
+            setRequestProperty("Accept", "application/json")
+        }
+        try {
+            connection.outputStream.use { it.write(evidence.toString().toByteArray(Charsets.UTF_8)) }
+            val status = connection.responseCode
+            val stream = if (status in 200..299) connection.inputStream else connection.errorStream
+            val responseText = stream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
+            val response = runCatching { JSONObject(responseText) }.getOrNull()
+            if (status !in 200..299) {
+                val reason = when (status) {
+                    401 -> "Jeton Render refusé. Vérifie la configuration sans partager le jeton."
+                    503 -> response?.optString("message")?.ifBlank { null }
+                        ?: "Le moteur IA de sécurité est indisponible ou limité."
+                    502 -> response?.optString("message")?.ifBlank { null }
+                        ?: "Le fournisseur IA n'a pas pu analyser les métadonnées."
+                    else -> "Erreur du serveur de sécurité IKAR (HTTP $status)."
+                }
+                throw IllegalStateException(reason)
+            }
+            return response?.optString("reply")?.takeIf { it.isNotBlank() }
+                ?: throw IllegalStateException("L'analyse IA a renvoyé une réponse vide.")
+        } finally {
+            connection.disconnect()
+        }
+    }
+
     fun sendMessage(
         apiToken: String,
         message: String,
