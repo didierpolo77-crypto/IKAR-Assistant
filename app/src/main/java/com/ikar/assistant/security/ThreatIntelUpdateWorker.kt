@@ -49,7 +49,10 @@ class ThreatIntelUpdateWorker(
 ) : CoroutineWorker(appContext, params) {
     override suspend fun doWork(): Result {
         val authKey = ThreatIntelStore.readAuthKey(applicationContext)
-            ?: return Result.failure()
+            ?: run {
+                ThreatIntelStore.setUpdateStatus(applicationContext, "Clé URLhaus absente ou illisible.")
+                return Result.failure()
+            }
         var connection: HttpURLConnection? = null
         return try {
             val endpoint = "https://urlhaus-api.abuse.ch/v1/urls/recent/limit/1000/"
@@ -63,14 +66,24 @@ class ThreatIntelUpdateWorker(
             }
             val status = connection.responseCode
             if (status !in 200..299) {
-                if (status == 401 || status == 403) return Result.failure()
+                if (status == 401 || status == 403) {
+                    ThreatIntelStore.setUpdateStatus(applicationContext, "Clé URLhaus refusée (HTTP $status).")
+                    return Result.failure()
+                }
+                ThreatIntelStore.setUpdateStatus(applicationContext, "Serveur URLhaus temporairement indisponible (HTTP $status).")
                 return Result.retry()
             }
             val body = connection.inputStream.bufferedReader().use { it.readText() }
             if (body.length > 8_000_000) return Result.failure()
             val root = JSONObject(body)
-            if (root.optString("query_status") != "ok") return Result.retry()
-            val items = root.optJSONArray("urls") ?: return Result.retry()
+            if (root.optString("query_status") != "ok") {
+                ThreatIntelStore.setUpdateStatus(applicationContext, "URLhaus n'a pas confirmé la requête : ${root.optString("query_status")}.")
+                return Result.retry()
+            }
+            val items = root.optJSONArray("urls") ?: run {
+                ThreatIntelStore.setUpdateStatus(applicationContext, "Réponse URLhaus invalide : liste absente.")
+                return Result.retry()
+            }
             val active = linkedSetOf<String>()
             for (index in 0 until items.length()) {
                 val item = items.optJSONObject(index) ?: continue
@@ -80,14 +93,21 @@ class ThreatIntelUpdateWorker(
                     active += url
                 }
             }
-            if (active.isEmpty()) return Result.retry()
+            if (active.isEmpty()) {
+                ThreatIntelStore.setUpdateStatus(applicationContext, "Aucun indicateur actif reçu ; ancienne base conservée.")
+                return Result.retry()
+            }
             ThreatIntelStore.replaceActiveUrls(applicationContext, active)
+            ThreatIntelStore.setUpdateStatus(applicationContext, "Mise à jour réussie : ${active.size} URLs actives reçues.")
             Result.success()
         } catch (_: java.net.SocketTimeoutException) {
+            ThreatIntelStore.setUpdateStatus(applicationContext, "Délai dépassé pendant la mise à jour URLhaus.")
             Result.retry()
         } catch (_: java.io.IOException) {
+            ThreatIntelStore.setUpdateStatus(applicationContext, "Erreur réseau pendant la mise à jour URLhaus.")
             Result.retry()
-        } catch (_: Exception) {
+        } catch (error: Exception) {
+            ThreatIntelStore.setUpdateStatus(applicationContext, "Erreur de mise à jour : ${error.javaClass.simpleName}.")
             Result.failure()
         } finally {
             connection?.disconnect()
