@@ -45,7 +45,8 @@ class IkarSafeBrowserActivity : Activity() {
         }
         val controls = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         address = EditText(this).apply {
-            singleLine = true
+            maxLines = 1
+            setSingleLine(true)
             hint = "https://exemple.com"
             setTextColor(Color.WHITE)
             setHintTextColor(Color.LTGRAY)
