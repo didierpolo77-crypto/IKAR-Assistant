@@ -24,6 +24,9 @@ class AppInstallGuardReceiver : BroadcastReceiver() {
         if (intent.action != Intent.ACTION_PACKAGE_ADDED &&
             intent.action != Intent.ACTION_PACKAGE_REPLACED
         ) return
+        if (intent.action == Intent.ACTION_PACKAGE_ADDED &&
+            intent.getBooleanExtra(Intent.EXTRA_REPLACING, false)
+        ) return
 
         val packageName = intent.data?.schemeSpecificPart ?: return
         if (packageName == context.packageName) return
