@@ -81,6 +81,10 @@ object FileScanner {
             if (total == 0L) indicators += "Fichier vide."
 
             var packageName: String? = null
+            var apkVersionName: String? = null
+            var apkVersionCode: Long? = null
+            var targetSdk: Int? = null
+            var certificateSha256: String? = null
             val sensitive = mutableListOf<String>()
             if (isApk) {
                 @Suppress("DEPRECATION")
@@ -89,10 +93,6 @@ object FileScanner {
                     PackageManager.GET_PERMISSIONS or PackageManager.GET_META_DATA or
                         (if (android.os.Build.VERSION.SDK_INT >= 28) PackageManager.GET_SIGNING_CERTIFICATES else PackageManager.GET_SIGNATURES)
                 )
-                var apkVersionName: String? = null
-                var apkVersionCode: Long? = null
-                var targetSdk: Int? = null
-                var certificateSha256: String? = null
                 if (info == null) {
                     indicators += "Android n'a pas pu lire le manifeste de cet APK."
                 } else {
