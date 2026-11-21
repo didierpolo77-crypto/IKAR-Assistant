@@ -20,6 +20,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -43,6 +45,8 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.Divider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
@@ -120,8 +124,8 @@ class MainActivity : ComponentActivity() {
         }
         val memoryDao = MemoryDatabase.getInstance(applicationContext).memoryDao()
         setContent {
-            MaterialTheme(colorScheme = darkColorScheme(primary = Color(0xFF31E7FF), secondary = Color(0xFFB65CFF), background = Color(0xFF070A18), surface = Color(0xFF121832), onPrimary = Color(0xFF06101D), onBackground = Color(0xFFF3F5FF), onSurface = Color(0xFFF3F5FF))) {
-                Surface(modifier = Modifier.fillMaxSize(), color = Color(0xFF070A18)) {
+            MaterialTheme(colorScheme = darkColorScheme(primary = Color(0xFF78E000), secondary = Color(0xFF39B54A), background = Color(0xFF050805), surface = Color(0xFF111811), onPrimary = Color(0xFF071006), onBackground = Color(0xFFF3F7F0), onSurface = Color(0xFFF3F7F0))) {
+                Surface(modifier = Modifier.fillMaxSize(), color = Color(0xFF050805)) {
                     IkarHome(
                         memoryDao = memoryDao,
                         onPickImage = { uri, onResult -> recognizeText(uri, onResult) },
@@ -369,6 +373,11 @@ private fun IkarHome(
         else memoryError = "Autorise le microphone pour parler à IKAR."
     }
     val scope = rememberCoroutineScope()
+    var selectedNavigation by remember { mutableStateOf("Accueil") }
+    val homeRequester = remember { BringIntoViewRequester() }
+    val securityRequester = remember { BringIntoViewRequester() }
+    val assistantRequester = remember { BringIntoViewRequester() }
+    val toolsRequester = remember { BringIntoViewRequester() }
 
     suspend fun refreshMemories() {
         val allEntries = withContext(Dispatchers.IO) { memoryDao.getAll() }
@@ -499,19 +508,24 @@ private fun IkarHome(
         }
     }
 
-    Column(
-        modifier = Modifier.fillMaxSize()
-            .background(Brush.verticalGradient(listOf(Color(0xFF080B1C), Color(0xFF11102D), Color(0xFF070A18))))
+    Column(Modifier.fillMaxSize().background(Color(0xFF050805))) {
+      Column(
+        modifier = Modifier.weight(1f).fillMaxWidth()
+            .background(Brush.verticalGradient(listOf(Color(0xFF050805), Color(0xFF0B130B), Color(0xFF050805))))
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 16.dp, vertical = 18.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        IkarBrandHeader()
-        IkarWelcomePanel()
-        IkarModuleDashboard(openTasks = productivityItems.count { it.content.startsWith("OPEN|") })
-        PendingActionCenter(memoryDao = memoryDao)
+      ) {
+        Box(Modifier.fillMaxWidth().bringIntoViewRequester(homeRequester)) {
+            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                IkarBrandHeader()
+                IkarWelcomePanel()
+                IkarModuleDashboard(openTasks = productivityItems.count { it.content.startsWith("OPEN|") })
+                PendingActionCenter(memoryDao = memoryDao)
+            }
+        }
 
-        Card(Modifier.fillMaxWidth()) {
+        Card(Modifier.fillMaxWidth().bringIntoViewRequester(securityRequester)) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Protection anti-espionnage", style = MaterialTheme.typography.titleLarge)
                 if (Build.VERSION.SDK_INT >= 33 && !securityNotificationsAllowed) {
@@ -751,7 +765,7 @@ private fun IkarHome(
             }
         }
 
-        Card(Modifier.fillMaxWidth()) {
+        Card(Modifier.fillMaxWidth().bringIntoViewRequester(assistantRequester)) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("Discussion hors connexion", style = MaterialTheme.typography.titleLarge)
                 Text("IKAR recherche dans tes notes et tes textes extraits. Les échanges sont enregistrés sur ce téléphone.", style = MaterialTheme.typography.bodySmall)
@@ -989,7 +1003,7 @@ private fun IkarHome(
             }
         }
 
-        Card(Modifier.fillMaxWidth()) {
+        Card(Modifier.fillMaxWidth().bringIntoViewRequester(toolsRequester)) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Mémoire personnelle hors connexion", style = MaterialTheme.typography.titleMedium)
                 Text("Enregistre des notes et importe des documents pour qu'IKAR puisse les retrouver hors connexion. Tout reste dans le stockage privé de cette application.")
@@ -1149,6 +1163,27 @@ private fun IkarHome(
             "Confidentialité : les notes, textes extraits et documents restent locaux. Ils ne sont envoyés au serveur que si tu actives explicitement le partage des éléments pertinents en mode en ligne.",
             style = MaterialTheme.typography.bodySmall
         )
+      }
+      NavigationBar(containerColor = Color(0xFF0B110B), contentColor = Color(0xFF78E000)) {
+          val destinations = listOf(
+              Triple("Accueil", "⌂", homeRequester),
+              Triple("Sécurité", "⬡", securityRequester),
+              Triple("Assistant", "✦", assistantRequester),
+              Triple("Outils", "▦", toolsRequester)
+          )
+          destinations.forEach { (label, symbol, requester) ->
+              NavigationBarItem(
+                  selected = selectedNavigation == label,
+                  onClick = {
+                      selectedNavigation = label
+                      scope.launch { requester.bringIntoView() }
+                  },
+                  icon = { Text(symbol, style = MaterialTheme.typography.titleMedium) },
+                  label = { Text(label, style = MaterialTheme.typography.labelSmall) },
+                  alwaysShowLabel = true
+              )
+          }
+      }
     }
 }
 
@@ -1157,29 +1192,29 @@ private fun IkarHome(
 private fun IkarBrandHeader() {
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
         Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Box(modifier = Modifier.size(54.dp).background(Brush.linearGradient(listOf(Color(0xFF7B4DFF), Color(0xFF00DFFF))), RoundedCornerShape(17.dp)), contentAlignment = androidx.compose.ui.Alignment.Center) {
+            Box(modifier = Modifier.size(54.dp).background(Brush.linearGradient(listOf(Color(0xFF78E000), Color(0xFF218838))), RoundedCornerShape(17.dp)), contentAlignment = androidx.compose.ui.Alignment.Center) {
                 Text("IK", color = Color.White, fontWeight = FontWeight.Black, style = MaterialTheme.typography.titleLarge)
             }
             Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
                 Text("IKAR Assistant", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                Text("TON ASSISTANT INTELLIGENT", style = MaterialTheme.typography.labelSmall, color = Color(0xFF9CA8D5))
+                Text("TON ASSISTANT INTELLIGENT", style = MaterialTheme.typography.labelSmall, color = Color(0xFF9DB58E))
             }
         }
         Column(horizontalAlignment = androidx.compose.ui.Alignment.End) {
             Text("VERSION", style = MaterialTheme.typography.labelSmall, color = Color(0xFF8E9ABD))
-            Text("0.62.0", color = Color(0xFF39E5FF), fontWeight = FontWeight.Bold)
+            Text("0.62.0", color = Color(0xFF78E000), fontWeight = FontWeight.Bold)
         }
     }
 }
 
 @Composable
 private fun IkarWelcomePanel() {
-    Box(modifier = Modifier.fillMaxWidth().background(Brush.linearGradient(listOf(Color(0xFF172A58), Color(0xFF26134A), Color(0xFF101A35))), RoundedCornerShape(24.dp)).border(1.dp, Color(0xFF5368D9), RoundedCornerShape(24.dp)).padding(18.dp)) {
+    Box(modifier = Modifier.fillMaxWidth().background(Brush.linearGradient(listOf(Color(0xFF142414), Color(0xFF0C180C), Color(0xFF080D08))), RoundedCornerShape(24.dp)).border(1.dp, Color(0xFF3E7D24), RoundedCornerShape(24.dp)).padding(18.dp)) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("✦  VOTRE ESPACE INTELLIGENT", color = Color(0xFF55E9FF), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+            Text("✦  VOTRE ESPACE INTELLIGENT", color = Color(0xFF8BEA42), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
             Text("Bonjour ! Je suis IKAR.", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = Color.White)
-            Text("Comment puis-je vous aider aujourd’hui ?", style = MaterialTheme.typography.bodyLarge, color = Color(0xFFE0E7FF))
-            Text("IA en ligne • Mémoire locale • Outils Android", style = MaterialTheme.typography.labelSmall, color = Color(0xFFB5BFEA))
+            Text("Comment puis-je vous aider aujourd’hui ?", style = MaterialTheme.typography.bodyLarge, color = Color(0xFFE0F0D9))
+            Text("IA en ligne • Mémoire locale • Outils Android", style = MaterialTheme.typography.labelSmall, color = Color(0xFFB7CBAE))
         }
     }
 }
