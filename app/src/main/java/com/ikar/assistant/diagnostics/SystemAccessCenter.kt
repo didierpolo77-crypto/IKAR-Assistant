@@ -88,7 +88,11 @@ fun SystemAccessCenter() {
                     modifier = Modifier.weight(1f)
                 ) { Text("Accès notifications") }
                 Button(
-                    onClick = {\n                        listenerEnabled = NotificationManagerCompat.getEnabledListenerPackages(context).contains(context.packageName)\n                        seenCount = notificationPrefs.getInt("notifications_seen", 0)\n                        sensitiveCount = notificationPrefs.getInt("sensitive_count", 0)\n                    },
+                    onClick = {
+                        listenerEnabled = NotificationManagerCompat.getEnabledListenerPackages(context).contains(context.packageName)
+                        seenCount = notificationPrefs.getInt("notifications_seen", 0)
+                        sensitiveCount = notificationPrefs.getInt("sensitive_count", 0)
+                    },
                     modifier = Modifier.weight(1f)
                 ) { Text("Actualiser l'état") }
             }
