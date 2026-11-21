@@ -86,6 +86,7 @@ import com.ikar.assistant.security.ThreatIntelStore
 import com.ikar.assistant.security.ThreatIntelScheduler
 import com.ikar.assistant.security.IkarDnsFirewallService
 import com.ikar.assistant.security.SharedStorageBehaviorMonitor
+import com.ikar.assistant.security.DeviceBehaviorAnalyzer
 import com.ikar.assistant.security.LinkRiskReport
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
@@ -760,6 +761,9 @@ private fun IkarHome(
                 }
                 Text("Fréquence minimale Android : 15 minutes, mais le système peut retarder les contrôles pour économiser la batterie. IKAR compare les ajouts, modifications et suppressions ; il ne peut pas restaurer automatiquement les fichiers.", style = MaterialTheme.typography.bodySmall)
                 Text("Observation locale : $observedMediaChanges changement(s) MediaStore pendant la dernière minute ; $observedInstallCount installation(s) ou mise(s) à jour d'applications pendant les dix dernières minutes. IKAR combine ces événements avec les permissions accordées, les accès spéciaux, les notifications autorisées et les audits de dossiers. Observation MediaStore active uniquement quand IKAR est ouvert.", style = MaterialTheme.typography.bodySmall)
+                val deviceBehavior = DeviceBehaviorAnalyzer.assess(observedMediaChanges, observedInstallCount)
+                Text("Corrélation comportementale locale : ${deviceBehavior.level} (${deviceBehavior.score}/100)", style = MaterialTheme.typography.titleSmall)
+                deviceBehavior.reasons.forEach { reason -> Text("• $reason", style = MaterialTheme.typography.bodySmall) }
                 Text("Notifications traitées localement : $notificationsSeen · sensibles (codes/finance) : $sensitiveNotifications · dernière catégorie : $lastNotificationCategory. Le texte des notifications n'est pas conservé.", style = MaterialTheme.typography.bodySmall)
                 if (SharedStorageBehaviorMonitor.recentBurstDetected(context)) {
                     Text("Attention : une rafale de changements a été observée récemment dans les médias partagés. Lance un audit du dossier choisi.", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
