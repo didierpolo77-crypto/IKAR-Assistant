@@ -401,8 +401,8 @@ private fun IkarHome(
     val scope = rememberCoroutineScope()
     val vpnConsentLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode == android.app.Activity.RESULT_OK) {
+            // The UI reports the firewall active only after the service establishes its TUN.
             ContextCompat.startForegroundService(context, Intent(context, IkarDnsFirewallService::class.java))
-            firewallRunning = true
         } else {
             memoryError = "L'autorisation VPN Android a été refusée. Le filtrage réseau reste désactivé."
         }
@@ -816,7 +816,6 @@ private fun IkarHome(
                             val prepare = VpnService.prepare(context)
                             if (prepare == null) {
                                 ContextCompat.startForegroundService(context, Intent(context, IkarDnsFirewallService::class.java))
-                                firewallRunning = true
                             } else vpnConsentLauncher.launch(prepare)
                         } else {
                             context.stopService(Intent(context, IkarDnsFirewallService::class.java))
