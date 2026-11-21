@@ -297,6 +297,7 @@ private fun IkarHome(
     var threatIntelCount by remember { mutableIntStateOf(ThreatIntelStore.indicatorCount(context)) }
     var firewallRunning by remember { mutableStateOf(context.getSharedPreferences("ikar_security_center", android.content.Context.MODE_PRIVATE).getBoolean("dns_firewall_running", false)) }
     var observedMediaChanges by remember { mutableIntStateOf(SharedStorageBehaviorMonitor.recentChangeCount(context)) }
+    var observedInstallCount by remember { mutableIntStateOf(SharedStorageBehaviorMonitor.recentInstallCount(context)) }
 
     DisposableEffect(Unit) {
         onDispose {
@@ -432,6 +433,8 @@ private fun IkarHome(
         }
         while (true) {
             observedMediaChanges = SharedStorageBehaviorMonitor.recentChangeCount(context)
+            observedInstallCount = SharedStorageBehaviorMonitor.recentInstallCount(context)
+            threatIntelCount = ThreatIntelStore.indicatorCount(context)
             kotlinx.coroutines.delay(5000)
         }
     }
@@ -746,7 +749,7 @@ private fun IkarHome(
                     )
                 }
                 Text("Fréquence minimale Android : 15 minutes, mais le système peut retarder les contrôles pour économiser la batterie. IKAR compare les ajouts, modifications et suppressions ; il ne peut pas restaurer automatiquement les fichiers.", style = MaterialTheme.typography.bodySmall)
-                Text("Observation locale des médias partagés : $observedMediaChanges événement(s) détecté(s) pendant la dernière minute. Une rafale peut justifier un contrôle, mais les changements légitimes produisent aussi des événements. Observation active uniquement quand IKAR est ouvert.", style = MaterialTheme.typography.bodySmall)
+                Text("Observation locale : $observedMediaChanges changement(s) MediaStore pendant la dernière minute ; $observedInstallCount installation(s) ou mise(s) à jour d'applications pendant les dix dernières minutes. IKAR combine ces événements avec les permissions accordées, les accès spéciaux, les notifications autorisées et les audits de dossiers. Observation MediaStore active uniquement quand IKAR est ouvert.", style = MaterialTheme.typography.bodySmall)
                 if (SharedStorageBehaviorMonitor.recentBurstDetected(context)) {
                     Text("Attention : une rafale de changements a été observée récemment dans les médias partagés. Lance un audit du dossier choisi.", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                 }
@@ -787,7 +790,7 @@ private fun IkarHome(
                 Text("Sans clé valide, aucune base URLhaus n'est téléchargée et seules les règles locales restent actives.", style = MaterialTheme.typography.bodySmall)
                 Divider()
                 Text("Pare-feu réseau facultatif", style = MaterialTheme.typography.titleMedium)
-                Text("IKAR propose un filtre DNS local via VPNService. Il bloque les domaines présents dans la base URLhaus locale et relaie les autres requêtes DNS IPv4. Ce n'est pas un pare-feu complet : les connexions directes, DNS chiffrés (DoH/DoT) et certains flux IPv6 peuvent contourner ce filtre.", style = MaterialTheme.typography.bodySmall)
+                Text("IKAR propose un filtre DNS local via VPNService. Il bloque les domaines présents dans la base URLhaus locale et relaie les autres requêtes DNS IPv4. Ce n'est pas un pare-feu complet : les connexions directes, DNS chiffrés (DoH/DoT), DNS TCP et certains flux IPv6 peuvent contourner ce filtre. Il doit être validé sur l'appareil avant de compter dessus.", style = MaterialTheme.typography.bodySmall)
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text(if (firewallRunning) "Filtre DNS actif" else "Filtre DNS désactivé")
                     Switch(checked = firewallRunning, onCheckedChange = { enabled ->
@@ -833,7 +836,7 @@ private fun IkarHome(
                 linkReport?.let { report ->
                     Text(if (report.suspicious) "Lien à risque — ne l'ouvre pas avant vérification" else "Aucun signal heuristique détecté", style = MaterialTheme.typography.titleSmall)
                     report.reasons.forEach { Text("• $it", style = MaterialTheme.typography.bodySmall) }
-                    Text("Analyse locale heuristique : elle ne consulte pas encore une base de réputation web et ne peut pas garantir qu'un lien est sûr.", style = MaterialTheme.typography.bodySmall)
+                    Text(if (ThreatIntelStore.indicatorCount(context) > 0) "Analyse locale + indicateurs URLhaus téléchargés : cette vérification reste limitée aux URLs/domaines connus et ne garantit pas qu'un lien inconnu est sûr." else "Analyse locale heuristique : aucune base de réputation téléchargée. Un lien inconnu n'est pas nécessairement sûr.", style = MaterialTheme.typography.bodySmall)
                 }
                 Divider()
                 Text("Mode urgence", style = MaterialTheme.typography.titleMedium)
