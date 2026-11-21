@@ -25,6 +25,8 @@ import androidx.core.content.ContextCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 
 /**
  * Transparent inventory of Android access currently supported by IKAR.
@@ -45,8 +47,8 @@ fun SystemAccessCenter() {
     val batteryExemption = powerManager.isIgnoringBatteryOptimizations(context.packageName)
     var listenerEnabled by remember { mutableStateOf(NotificationManagerCompat.getEnabledListenerPackages(context).contains(context.packageName)) }
     val notificationPrefs = remember { context.getSharedPreferences("ikar_notification_privacy", Context.MODE_PRIVATE) }
-    val seenCount = notificationPrefs.getInt("notifications_seen", 0)
-    val sensitiveCount = notificationPrefs.getInt("sensitive_count", 0)
+    var seenCount by remember { mutableStateOf(notificationPrefs.getInt("notifications_seen", 0)) }
+    var sensitiveCount by remember { mutableStateOf(notificationPrefs.getInt("sensitive_count", 0)) }
 
     fun openSettings(action: String, packageSpecific: Boolean = false) {
         val intent = if (packageSpecific) {
@@ -86,7 +88,7 @@ fun SystemAccessCenter() {
                     modifier = Modifier.weight(1f)
                 ) { Text("Accès notifications") }
                 Button(
-                    onClick = { listenerEnabled = NotificationManagerCompat.getEnabledListenerPackages(context).contains(context.packageName) },
+                    onClick = {\n                        listenerEnabled = NotificationManagerCompat.getEnabledListenerPackages(context).contains(context.packageName)\n                        seenCount = notificationPrefs.getInt("notifications_seen", 0)\n                        sensitiveCount = notificationPrefs.getInt("sensitive_count", 0)\n                    },
                     modifier = Modifier.weight(1f)
                 ) { Text("Actualiser l'état") }
             }
