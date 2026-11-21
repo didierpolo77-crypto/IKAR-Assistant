@@ -102,7 +102,7 @@ object ThreatIntelStore {
         val candidates = runCatching { JSONArray(stored) }.getOrNull() ?: return false
         for (i in 0 until candidates.length()) {
             val known = candidates.optString(i)
-            if (known.equals(rawUrl.trim(), ignoreCase = true)) return true
+            if (known == rawUrl.trim()) return true
             val knownUri = runCatching { URI(known) }.getOrNull() ?: continue
             val knownHost = knownUri.host?.lowercase()
             val rootDomainIndicator = (knownUri.rawPath.isNullOrBlank() || knownUri.rawPath == "/") &&
