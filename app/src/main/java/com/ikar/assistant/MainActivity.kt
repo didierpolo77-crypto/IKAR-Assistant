@@ -287,6 +287,9 @@ private fun IkarHome(
     var fileScanRunning by remember { mutableStateOf(false) }
     var folderReport by remember { mutableStateOf<FolderRiskReport?>(null) }
     var folderScanRunning by remember { mutableStateOf(false) }
+    var vaultBackupStatus by remember { mutableStateOf("Aucune copie de récupération sélectionnée.") }
+    var vaultBackupIds by remember { mutableStateOf(RansomwareRecoveryVault.list(context)) }
+    var selectedVaultBackupId by remember { mutableStateOf<String?>(null) }
     var folderMonitoringEnabled by remember { mutableStateOf(context.getSharedPreferences("ikar_security_center", android.content.Context.MODE_PRIVATE).getBoolean("folder_monitoring_enabled", false)) }
     var savedFolderUri by remember { mutableStateOf(context.getSharedPreferences("ikar_security_center", android.content.Context.MODE_PRIVATE).getString("monitored_folder_uri", null)) }
     var linkInput by remember { mutableStateOf("") }
@@ -563,6 +566,43 @@ private fun IkarHome(
         }
     }
 
+    val recoveryBackupPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            scope.launch {
+                vaultBackupStatus = "Chiffrement de la copie en cours…"
+                try {
+                    val backup = withContext(Dispatchers.IO) {
+                        RansomwareRecoveryVault.backup(context.applicationContext, uri)
+                    }
+                    vaultBackupIds = withContext(Dispatchers.IO) { RansomwareRecoveryVault.list(context.applicationContext) }
+                    selectedVaultBackupId = backup.id
+                    vaultBackupStatus = "Copie chiffrée créée pour « ${backup.originalName} » (${backup.sizeBytes} octets)."
+                } catch (error: Exception) {
+                    vaultBackupStatus = "Échec de la copie : ${error.localizedMessage ?: "erreur inconnue"}"
+                }
+            }
+        }
+    }
+    val recoveryRestoreFolderPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+        if (uri != null) {
+            val backupId = selectedVaultBackupId ?: vaultBackupIds.lastOrNull()
+            if (backupId == null) {
+                vaultBackupStatus = "Aucune copie disponible à restaurer."
+            } else {
+                scope.launch {
+                    try {
+                        val restoredUri = withContext(Dispatchers.IO) {
+                            RansomwareRecoveryVault.restoreToNewDocument(context.applicationContext, backupId, uri)
+                        }
+                        vaultBackupStatus = "Copie restaurée dans un nouveau fichier : ${restoredUri.lastPathSegment ?: "fichier restauré"}."
+                    } catch (error: Exception) {
+                        vaultBackupStatus = "Restauration impossible : ${error.localizedMessage ?: "erreur inconnue"}"
+                    }
+                }
+            }
+        }
+    }
+
     Column(Modifier.fillMaxSize().background(Color(0xFF050805))) {
       Column(
         modifier = Modifier.weight(1f).fillMaxWidth()
@@ -723,6 +763,18 @@ private fun IkarHome(
                 Text("Centre de sécurité avancé", style = MaterialTheme.typography.titleLarge)
                 Text("Contrôle événementiel des applications : IKAR examine les permissions et quelques indicateurs lors d’une nouvelle installation ou mise à jour. Une alerte heuristique n’est pas une preuve de malware. Les notifications Android doivent être autorisées.", style = MaterialTheme.typography.bodySmall)
                 Text("Anti-ransomware : choisis un dossier important (par exemple Documents). IKAR compare les noms, tailles et dates de modification entre deux audits. Ce contrôle manuel n'est pas une surveillance en temps réel.")
+                Text("Coffre de récupération : crée une copie chiffrée dans le stockage privé d’IKAR avant de travailler sur un fichier important. La copie est protégée par une clé Android Keystore et peut être restaurée sous forme d’un nouveau fichier.")
+                Button(onClick = { recoveryBackupPicker.launch(arrayOf("*/*")) }, modifier = Modifier.fillMaxWidth()) {
+                    Text("Créer une copie chiffrée")
+                }
+                Button(
+                    onClick = { recoveryRestoreFolderPicker.launch(null) },
+                    enabled = vaultBackupIds.isNotEmpty(),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Restaurer la dernière copie dans un dossier")
+                }
+                Text("${vaultBackupIds.size} copie(s) chiffrée(s) · ${vaultBackupStatus}", style = MaterialTheme.typography.bodySmall)
                 Button(onClick = { folderPicker.launch(null) }, enabled = !folderScanRunning, modifier = Modifier.fillMaxWidth()) {
                     Text(if (folderScanRunning) "Audit en cours…" else "Choisir un dossier à surveiller")
                 }
