@@ -252,6 +252,8 @@ private fun IkarHome(
     var inferenceTestStatus by remember { mutableStateOf<String?>(null) }
     var securityReport by remember { mutableStateOf<SecurityReport?>(null) }
     var securityScanRunning by remember { mutableStateOf(false) }
+    var aiSecurityRunningPackage by remember { mutableStateOf<String?>(null) }
+    var aiSecurityAnalysis by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     var fileScanReport by remember { mutableStateOf<FileScanReport?>(null) }
     var fileScanRunning by remember { mutableStateOf(false) }
     var folderReport by remember { mutableStateOf<FolderRiskReport?>(null) }
@@ -484,7 +486,7 @@ private fun IkarHome(
         Card(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Protection anti-espionnage", style = MaterialTheme.typography.titleLarge)
-                Text("Analyse locale des permissions sensibles et des accès spéciaux activés. Les résultats sont des signaux de risque, pas une preuve qu'une application est malveillante.")
+                Text("Analyse locale des permissions sensibles et des accès spéciaux activés. Les résultats sont des signaux de risque, pas une preuve qu'une application est malveillante. L'analyse IA facultative envoie uniquement les métadonnées et les indices affichés, jamais le fichier APK.")
                 Button(
                     onClick = {
                         if (!securityScanRunning) {
@@ -522,6 +524,32 @@ private fun IkarHome(
                                     Text("Risque ${finding.severity} · indice ${finding.score}/100", style = MaterialTheme.typography.labelMedium)
                                     finding.reasons.forEach { reason ->
                                         Text("• $reason", style = MaterialTheme.typography.bodySmall)
+                                    }
+                                    Button(
+                                        onClick = {
+                                            if (aiSecurityRunningPackage == null) {
+                                                aiSecurityRunningPackage = finding.packageName
+                                                scope.launch {
+                                                    try {
+                                                        val analysis = withContext(Dispatchers.IO) {
+                                                            RenderOnlineModelGateway.analyzeSecurity(apiToken, finding)
+                                                        }
+                                                        aiSecurityAnalysis = aiSecurityAnalysis + (finding.packageName to analysis)
+                                                    } catch (error: Exception) {
+                                                        memoryError = "Analyse IA de sécurité impossible : ${error.localizedMessage ?: "erreur inconnue"}"
+                                                    } finally {
+                                                        aiSecurityRunningPackage = null
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        enabled = apiToken.isNotBlank() && aiSecurityRunningPackage == null
+                                    ) {
+                                        Text(if (aiSecurityRunningPackage == finding.packageName) "Analyse IA en cours…" else "Approfondir avec l'IA")
+                                    }
+                                    aiSecurityAnalysis[finding.packageName]?.let { analysis ->
+                                        Text("Analyse IA (métadonnées uniquement) :", style = MaterialTheme.typography.labelMedium)
+                                        Text(analysis, style = MaterialTheme.typography.bodySmall)
                                     }
                                 }
                             }
