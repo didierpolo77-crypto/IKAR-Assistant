@@ -74,8 +74,11 @@ object ThreatIntelStore {
         for (i in 0 until candidates.length()) {
             val known = candidates.optString(i)
             if (known.equals(rawUrl.trim(), ignoreCase = true)) return true
-            val knownHost = runCatching { URI(known).host?.lowercase() }.getOrNull()
-            if (knownHost != null && knownHost == host) return true
+            val knownUri = runCatching { URI(known) }.getOrNull() ?: continue
+            val knownHost = knownUri.host?.lowercase()
+            val rootDomainIndicator = knownUri.rawPath.isNullOrBlank() ||
+                knownUri.rawPath == "/" && knownUri.rawQuery.isNullOrBlank()
+            if (rootDomainIndicator && knownHost != null && knownHost == host) return true
         }
         return false
     }
@@ -87,8 +90,11 @@ object ThreatIntelStore {
             ?: return false
         val candidates = runCatching { JSONArray(stored) }.getOrNull() ?: return false
         for (i in 0 until candidates.length()) {
-            val knownHost = runCatching { URI(candidates.optString(i)).host?.lowercase()?.trimEnd('.') }.getOrNull()
-            if (knownHost != null && (host == knownHost || host.endsWith(".$knownHost"))) return true
+            val knownUri = runCatching { URI(candidates.optString(i)) }.getOrNull() ?: continue
+            val knownHost = knownUri.host?.lowercase()?.trimEnd('.')
+            val rootDomainIndicator = knownUri.rawPath.isNullOrBlank() ||
+                knownUri.rawPath == "/" && knownUri.rawQuery.isNullOrBlank()
+            if (rootDomainIndicator && knownHost != null && (host == knownHost || host.endsWith(".$knownHost"))) return true
         }
         return false
     }
