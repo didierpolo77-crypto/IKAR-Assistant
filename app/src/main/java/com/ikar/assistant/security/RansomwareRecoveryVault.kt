@@ -133,7 +133,7 @@ object RansomwareRecoveryVault {
     fun list(context: Context): List<String> =
         vaultDir(context).listFiles()
             ?.filter { it.isFile && it.extension == "ikv" }
+            ?.sortedBy { it.lastModified() }
             ?.map { it.nameWithoutExtension }
-            ?.sorted()
             .orEmpty()
 }
