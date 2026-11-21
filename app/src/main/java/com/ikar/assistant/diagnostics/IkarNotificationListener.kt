@@ -10,8 +10,7 @@ import java.util.Locale
  * Raw titles and message bodies are never persisted or sent to a backend.
  */
 class IkarNotificationListener : NotificationListenerService() {
-    override fun onNotificationPosted(sbn: StatusBarNotification?) {
-        sbn ?: return
+    override fun onNotificationPosted(sbn: StatusBarNotification) {
         if (sbn.packageName == packageName) return
 
         val extras = sbn.notification.extras
