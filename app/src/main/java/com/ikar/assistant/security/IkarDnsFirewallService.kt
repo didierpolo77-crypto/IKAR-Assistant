@@ -80,7 +80,7 @@ class IkarDnsFirewallService : VpnService() {
     }
 
     private fun handleDnsPacket(packet: ByteArray, length: Int): ByteArray? {
-        if (length < 28 || packet[0].toInt().ushr(4) != 4 || packet[9].toInt() and 0xff != 17) return null
+        if (length < 28 || packet[0].toInt().ushr(4) != 4 || (packet[9].toInt() and 0xff) != 17) return null
         val ipHeaderLength = (packet[0].toInt() and 0x0f) * 4
         if (ipHeaderLength < 20 || length < ipHeaderLength + 8 + 12) return null
         val sourceIp = packet.copyOfRange(12, 16)
