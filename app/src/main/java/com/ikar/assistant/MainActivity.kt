@@ -584,6 +584,7 @@ private fun IkarHome(
         Card(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Centre de sécurité avancé", style = MaterialTheme.typography.titleLarge)
+                Text("Contrôle événementiel des applications : IKAR examine les permissions et quelques indicateurs lors d’une nouvelle installation ou mise à jour. Une alerte heuristique n’est pas une preuve de malware. Les notifications Android doivent être autorisées.", style = MaterialTheme.typography.bodySmall)
                 Text("Anti-ransomware : choisis un dossier important (par exemple Documents). IKAR compare les noms, tailles et dates de modification entre deux audits. Ce contrôle manuel n'est pas une surveillance en temps réel.")
                 Button(onClick = { folderPicker.launch(null) }, enabled = !folderScanRunning, modifier = Modifier.fillMaxWidth()) {
                     Text(if (folderScanRunning) "Audit en cours…" else "Choisir un dossier à surveiller")
