@@ -13,7 +13,11 @@ data class FolderRiskReport(
     val inspected: Int,
     val changed: Int,
     val suspiciousNames: List<String>,
-    val message: String
+    val message: String,
+    val added: Int = 0,
+    val modified: Int = 0,
+    val removed: Int = 0,
+    val alert: Boolean = false
 )
 
 data class LinkRiskReport(val url: String, val suspicious: Boolean, val reasons: List<String>)
@@ -118,8 +122,11 @@ object SecurityCenter {
                     val key = file.uri.toString()
                     current.put(key, "${file.length()}:${file.lastModified()}")
                     val lower = name.lowercase(Locale.ROOT)
-                    if (lower.endsWith(".locked") || lower.endsWith(".encrypted") ||
-                        lower.endsWith(".crypt") || lower.endsWith(".lockbit")) {
+                    if (listOf(
+                            ".locked", ".encrypted", ".crypt", ".lockbit", ".akira",
+                            ".blackcat", ".conti", ".ryuk", ".wannacry", ".cryptolocker",
+                            ".enc", ".pay2key"
+                        ).any { lower.endsWith(it) }) {
                         suspicious += name
                     }
                 }
@@ -128,26 +135,44 @@ object SecurityCenter {
         walk(root, 0)
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val oldText = prefs.getString(SNAPSHOT, null)
-        var changed = 0
+        var added = 0
+        var modified = 0
+        var removed = 0
         if (oldText != null) {
             val old = runCatching { JSONObject(oldText) }.getOrNull()
             if (old != null) {
-                val keys = old.keys()
-                while (keys.hasNext()) {
-                    val key = keys.next()
-                    if (!current.has(key) || old.optString(key) != current.optString(key)) changed++
+                val oldKeys = old.keys()
+                while (oldKeys.hasNext()) {
+                    val key = oldKeys.next()
+                    when {
+                        !current.has(key) -> removed++
+                        old.optString(key) != current.optString(key) -> modified++
+                    }
                 }
                 val newKeys = current.keys()
-                while (newKeys.hasNext()) if (!old.has(newKeys.next())) changed++
+                while (newKeys.hasNext()) {
+                    val key = newKeys.next()
+                    if (!old.has(key)) added++
+                }
             }
         }
+        val changed = added + modified + removed
+        val baselineExists = oldText != null
+        val alert = baselineExists && (
+            suspicious.isNotEmpty() || removed >= 10 || modified >= 20 ||
+                changed >= 30 || (inspected > 0 && changed >= 15 && changed * 100 / inspected >= 20)
+        )
         prefs.edit().putString(SNAPSHOT, current.toString()).apply()
         val message = when {
-            oldText == null -> "Référence créée. Relance une analyse plus tard pour comparer les changements."
-            changed >= 20 || suspicious.isNotEmpty() -> "ALERTE : changements importants ou extensions suspectes. Déconnecte le téléphone du réseau et vérifie tes fichiers."
-            else -> "Aucun changement massif détecté par cette comparaison."
+            !baselineExists -> "Référence créée. Les prochains audits compareront les ajouts, modifications et suppressions."
+            suspicious.isNotEmpty() -> "ALERTE : extension associée à un chiffrement suspect détectée. Vérifie les fichiers sans les ouvrir."
+            alert -> "ALERTE : volume inhabituel de changements détecté. IKAR ne peut pas confirmer un ransomware ; vérifie immédiatement les fichiers et sauvegardes."
+            else -> "Aucun changement massif détecté lors de cet audit."
         }
-        return FolderRiskReport(inspected, changed, suspicious.distinct().take(20), message)
+        return FolderRiskReport(
+            inspected, changed, suspicious.distinct().take(20), message,
+            added = added, modified = modified, removed = removed, alert = alert
+        )
     }
 
     fun setEmergency(context: Context, enabled: Boolean) {
