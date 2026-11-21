@@ -32,11 +32,17 @@ object SharedStorageBehaviorMonitor {
                     .putInt("change_count", count)
                     .putLong("last_event_at", now)
                     .apply()
-                if (count >= 25) {
+                if (count == 25) {
                     prefs.edit()
                         .putLong("burst_detected_at", now)
                         .putInt("burst_count", count)
                         .apply()
+                    val securityPrefs = appContext.getSharedPreferences("ikar_security_center", Context.MODE_PRIVATE)
+                    if (securityPrefs.getBoolean("folder_monitoring_enabled", false) &&
+                        securityPrefs.getString("monitored_folder_uri", null) != null
+                    ) {
+                        FolderAuditScheduler.runNow(appContext)
+                    }
                 }
             }
         }
