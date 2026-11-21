@@ -696,7 +696,7 @@ private fun IkarHome(
                     } else {
                         report.indicators.forEach { Text("• $it", style = MaterialTheme.typography.bodySmall) }
                     }
-                    Text("Cette version ne compare pas encore l'empreinte à une base de signatures de malwares et n'exécute pas YARA/ClamAV. Un résultat rassurant ne garantit donc pas que le fichier est sûr.", style = MaterialTheme.typography.bodySmall)
+                    Text("IKAR compare maintenant le SHA-256 aux empreintes URLhaus téléchargées si la base est configurée. Une correspondance est un indicateur à examiner, pas une preuve absolue. YARA et ClamAV ne sont pas encore intégrés.", style = MaterialTheme.typography.bodySmall)
                 } ?: Text("Aucun fichier analysé pour le moment.", style = MaterialTheme.typography.bodySmall)
             }
         }
@@ -804,7 +804,7 @@ private fun IkarHome(
                     Text("Actualiser maintenant")
                 }
                 Text(threatIntelStatus, style = MaterialTheme.typography.bodySmall)
-                Text("Indicateurs actifs enregistrés : $threatIntelCount · Dernière mise à jour : ${ThreatIntelStore.lastUpdatedAt(context).takeIf { it > 0 }?.let { java.text.DateFormat.getDateTimeInstance().format(java.util.Date(it)) } ?: "jamais"}", style = MaterialTheme.typography.bodySmall)
+                Text("URLs actives : $threatIntelCount · empreintes SHA-256 : ${ThreatIntelStore.hashCount(context)} · Dernière mise à jour : ${ThreatIntelStore.lastUpdatedAt(context).takeIf { it > 0 }?.let { java.text.DateFormat.getDateTimeInstance().format(java.util.Date(it)) } ?: "jamais"}", style = MaterialTheme.typography.bodySmall)
                 Text("Sans clé valide, aucune base URLhaus n'est téléchargée et seules les règles locales restent actives.", style = MaterialTheme.typography.bodySmall)
                 Divider()
                 Text("Pare-feu réseau facultatif", style = MaterialTheme.typography.titleMedium)
