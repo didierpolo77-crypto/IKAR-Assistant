@@ -519,7 +519,7 @@ private fun IkarHome(
                                 Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                     Text(finding.label, style = MaterialTheme.typography.titleSmall)
                                     Text(finding.packageName, style = MaterialTheme.typography.labelSmall)
-                                    Text("Indice de risque : ${finding.score}", style = MaterialTheme.typography.labelMedium)
+                                    Text("Risque ${finding.severity} · indice ${finding.score}/100", style = MaterialTheme.typography.labelMedium)
                                     finding.reasons.forEach { reason ->
                                         Text("• $reason", style = MaterialTheme.typography.bodySmall)
                                     }
