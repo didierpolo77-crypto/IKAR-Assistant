@@ -25,7 +25,8 @@ object ThreatAssessmentEngine {
         "notification_listener" to 14,
         "device_admin" to 18,
         "unknown_installer" to 5,
-        "debuggable" to 6
+        "debuggable" to 6,
+        "recent_install_burst" to 8
     )
 
     fun assess(signalIds: Set<String>): ThreatAssessment {
@@ -60,6 +61,14 @@ object ThreatAssessmentEngine {
         if ("background_location" in known && "microphone" in known && "camera" in known) {
             score += 10
             reasons += "Corrélation renforcée : localisation en arrière-plan et deux capteurs sensibles."
+        }
+        if ("recent_install_burst" in known && "unknown_installer" in known) {
+            score += 10
+            reasons += "Contexte à examiner : plusieurs installations récentes et source de cette application non identifiée."
+        }
+        if ("recent_install_burst" in known && "accessibility" in known) {
+            score += 8
+            reasons += "Contexte à examiner : rafale d'installations récente et accès d'accessibilité activé."
         }
 
         val bounded = score.coerceIn(0, 100)
