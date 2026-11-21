@@ -269,16 +269,15 @@ private fun IkarHome(
         }
     }
 
-    fun beginVoiceRecognition() {
+    fun beginVoiceRecognition(languageTag: String = "fr-FR", allowFallback: Boolean = true) {
         try {
             if (!SpeechRecognizer.isRecognitionAvailable(context)) {
-                memoryError = "Aucun service de reconnaissance vocale n'est disponible."
+                memoryError = "Aucun service de reconnaissance vocale n'est disponible sur cet appareil. Installe ou active un service vocal Android, puis réessaie."
                 return
             }
-            val recognizer = if (Build.VERSION.SDK_INT >= 31 &&
-                SpeechRecognizer.isOnDeviceRecognitionAvailable(context)
-            ) SpeechRecognizer.createOnDeviceSpeechRecognizer(context)
-            else SpeechRecognizer.createSpeechRecognizer(context)
+            // Le service vocal par défaut gère mieux les langues installées par le fabricant
+            // que le moteur local forcé, qui peut annoncer à tort que le français est absent.
+            val recognizer = SpeechRecognizer.createSpeechRecognizer(context)
             recognizerState.value?.destroy()
             recognizerState.value = recognizer
             recognizer.setRecognitionListener(object : RecognitionListener {
@@ -291,7 +290,24 @@ private fun IkarHome(
                     listening = false
                     recognizer.destroy()
                     recognizerState.value = null
-                    memoryError = "Échec de la reconnaissance vocale (code $error). Vérifie les services vocaux et la langue française."
+                    if (error == SpeechRecognizer.ERROR_LANGUAGE_NOT_SUPPORTED && allowFallback && languageTag == "fr-FR") {
+                        memoryError = "Le service vocal ne reconnaît pas encore le réglage fr-FR. Nouvel essai avec la langue française générique…"
+                        beginVoiceRecognition(languageTag = "fr", allowFallback = false)
+                        return
+                    }
+                    memoryError = when (error) {
+                        SpeechRecognizer.ERROR_LANGUAGE_NOT_SUPPORTED ->
+                            "Le service vocal de cet appareil ne prend pas en charge le français sélectionné (code 12). Essaie d'activer ou de télécharger le français dans les réglages de saisie vocale Android."
+                        SpeechRecognizer.ERROR_NETWORK, SpeechRecognizer.ERROR_NETWORK_TIMEOUT ->
+                            "Le service vocal n'a pas réussi à joindre son réseau. Vérifie Internet ou active un pack vocal hors connexion."
+                        SpeechRecognizer.ERROR_AUDIO ->
+                            "Le microphone n'a pas pu être utilisé. Vérifie son autorisation et qu'aucune autre application ne l'occupe."
+                        SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS ->
+                            "L'autorisation du microphone est nécessaire pour la reconnaissance vocale."
+                        SpeechRecognizer.ERROR_NO_MATCH, SpeechRecognizer.ERROR_SPEECH_TIMEOUT ->
+                            "Je n'ai pas compris de parole. Parle plus près du microphone puis réessaie."
+                        else -> "Échec de la reconnaissance vocale (code $error). Vérifie le service vocal Android."
+                    }
                 }
                 override fun onResults(results: Bundle?) {
                     listening = false
@@ -305,8 +321,9 @@ private fun IkarHome(
             })
             val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                putExtra(RecognizerIntent.EXTRA_LANGUAGE, "fr-FR")
-                putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE, languageTag)
+                // Ne force pas un moteur hors ligne qui peut ne pas avoir le pack français.
+                putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, false)
                 putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false)
             }
             recognizer.startListening(intent)
@@ -314,6 +331,8 @@ private fun IkarHome(
             memoryError = null
         } catch (error: Exception) {
             listening = false
+            recognizerState.value?.destroy()
+            recognizerState.value = null
             memoryError = "Impossible de démarrer le microphone : " + (error.localizedMessage ?: "service indisponible")
         }
     }
@@ -1067,7 +1086,7 @@ private fun IkarBrandHeader() {
         }
         Column(horizontalAlignment = androidx.compose.ui.Alignment.End) {
             Text("VERSION", style = MaterialTheme.typography.labelSmall, color = Color(0xFF8E9ABD))
-            Text("0.56.0", color = Color(0xFF39E5FF), fontWeight = FontWeight.Bold)
+            Text("0.57.0", color = Color(0xFF39E5FF), fontWeight = FontWeight.Bold)
         }
     }
 }
