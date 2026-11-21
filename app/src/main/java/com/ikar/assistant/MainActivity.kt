@@ -435,6 +435,7 @@ private fun IkarHome(
             observedMediaChanges = SharedStorageBehaviorMonitor.recentChangeCount(context)
             observedInstallCount = SharedStorageBehaviorMonitor.recentInstallCount(context)
             threatIntelCount = ThreatIntelStore.indicatorCount(context)
+            threatIntelStatus = ThreatIntelStore.updateStatus(context)
             firewallRunning = context.getSharedPreferences("ikar_security_center", android.content.Context.MODE_PRIVATE)
                 .getBoolean("dns_firewall_running", false)
             kotlinx.coroutines.delay(5000)
@@ -728,7 +729,7 @@ private fun IkarHome(
                         Text("Surveillance périodique en arrière-plan")
                         Text(
                             if (savedFolderUri == null) "Choisis d'abord un dossier pour autoriser cette surveillance."
-                            else "IKAR comparera périodiquement les fichiers de ce dossier et signalera les changements importants. Ce n'est pas une protection en temps réel.",
+                            else "IKAR comparera périodiquement les fichiers de ce dossier et signalera les changements importants. Une rafale d'événements MediaStore peut déclencher un audit immédiat, mais IKAR ne bloque pas les écritures et ne peut pas restaurer automatiquement les fichiers.",
                             style = MaterialTheme.typography.bodySmall
                         )
                     }
@@ -758,6 +759,13 @@ private fun IkarHome(
                 Divider()
                 Text("Base de signatures et réputation", style = MaterialTheme.typography.titleMedium)
                 Text("Source : URLhaus (URLs de distribution de malwares actives). Une clé gratuite abuse.ch est nécessaire. La clé est chiffrée avec Android Keystore sur cet appareil ; elle n'est pas transmise à IKAR ni à son serveur.", style = MaterialTheme.typography.bodySmall)
+                Button(onClick = {
+                    runCatching {
+                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://auth.abuse.ch/")))
+                    }.onFailure { threatIntelStatus = "Impossible d'ouvrir le portail d'authentification." }
+                }, modifier = Modifier.fillMaxWidth()) {
+                    Text("Obtenir une clé gratuite sur abuse.ch")
+                }
                 OutlinedTextField(
                     value = threatIntelAuthKey,
                     onValueChange = { threatIntelAuthKey = it },
@@ -792,7 +800,7 @@ private fun IkarHome(
                 Text("Sans clé valide, aucune base URLhaus n'est téléchargée et seules les règles locales restent actives.", style = MaterialTheme.typography.bodySmall)
                 Divider()
                 Text("Pare-feu réseau facultatif", style = MaterialTheme.typography.titleMedium)
-                Text("IKAR propose un filtre DNS local via VPNService. Il bloque les domaines présents dans la base URLhaus locale et relaie les autres requêtes DNS IPv4. Ce n'est pas un pare-feu complet : les connexions directes, DNS chiffrés (DoH/DoT), DNS TCP et certains flux IPv6 peuvent contourner ce filtre. Il doit être validé sur l'appareil avant de compter dessus.", style = MaterialTheme.typography.bodySmall)
+                Text("IKAR propose un filtre DNS local via VPNService. Il bloque les domaines présents dans la base URLhaus locale et relaie les autres requêtes DNS IPv4. Le filtre DNS bloque uniquement les domaines explicitement publiés comme indicateurs de domaine racine ; les indicateurs URLhaus visant un chemin précis ne sont pas bloqués au niveau DNS. Les connexions directes, DNS chiffrés (DoH/DoT), DNS TCP et certains flux IPv6 peuvent contourner ce filtre. Ce n'est pas un pare-feu complet.", style = MaterialTheme.typography.bodySmall)
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text(if (firewallRunning) "Filtre DNS actif" else "Filtre DNS désactivé")
                     Switch(checked = firewallRunning, onCheckedChange = { enabled ->
