@@ -7,6 +7,7 @@ import androidx.documentfile.provider.DocumentFile
 import org.json.JSONArray
 import org.json.JSONObject
 import java.net.URI
+import java.security.MessageDigest
 import java.util.Locale
 
 data class FolderRiskReport(
@@ -24,7 +25,14 @@ data class LinkRiskReport(val url: String, val suspicious: Boolean, val reasons:
 
 object SecurityCenter {
     private const val PREFS = "ikar_security_center"
-    private const val SNAPSHOT = "folder_snapshot"
+    private const val SNAPSHOT_PREFIX = "folder_snapshot_"
+
+    private fun snapshotKey(treeUri: Uri): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+            .digest(treeUri.toString().toByteArray(Charsets.UTF_8))
+        val suffix = digest.take(12).joinToString("") { "%02x".format(it) }
+        return SNAPSHOT_PREFIX + suffix
+    }
 
     fun checkLink(raw: String): LinkRiskReport {
         val value = raw.trim()
@@ -134,7 +142,8 @@ object SecurityCenter {
         }
         walk(root, 0)
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        val oldText = prefs.getString(SNAPSHOT, null)
+        val folderSnapshotKey = snapshotKey(treeUri)
+        val oldText = prefs.getString(folderSnapshotKey, null)
         var added = 0
         var modified = 0
         var removed = 0
@@ -162,7 +171,7 @@ object SecurityCenter {
             suspicious.isNotEmpty() || removed >= 10 || modified >= 20 ||
                 changed >= 30 || (inspected > 0 && changed >= 15 && changed * 100 / inspected >= 20)
         )
-        prefs.edit().putString(SNAPSHOT, current.toString()).apply()
+        prefs.edit().putString(folderSnapshotKey, current.toString()).apply()
         val message = when {
             !baselineExists -> "Référence créée. Les prochains audits compareront les ajouts, modifications et suppressions."
             suspicious.isNotEmpty() -> "ALERTE : extension associée à un chiffrement suspect détectée. Vérifie les fichiers sans les ouvrir."
