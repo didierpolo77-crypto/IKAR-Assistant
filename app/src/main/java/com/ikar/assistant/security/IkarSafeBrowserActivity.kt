@@ -123,7 +123,9 @@ class IkarSafeBrowserActivity : Activity() {
                     } else {
                         "Safe Browsing indisponible · prudence renforcée"
                     }
-                    if (ready) loadAddress(initial)
+                    // Keep navigation available when Android Safe Browsing cannot initialize,
+                    // but state the limitation explicitly instead of claiming full protection.
+                    loadAddress(initial)
                 }
             }
         } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -150,7 +152,12 @@ class IkarSafeBrowserActivity : Activity() {
             return
         }
         address.setText(normalized)
-        status.text = "Vérification Safe Browsing pendant le chargement…"
+        val localAssessment = SecurityCenter.checkLink(normalized)
+        status.text = if (localAssessment.suspicious) {
+            "Attention : ${localAssessment.reasons.joinToString(" ")} Contrôle Safe Browsing en complément."
+        } else {
+            "Aucun signal heuristique local évident · contrôle Safe Browsing en complément."
+        }
         browser.loadUrl(normalized)
     }
 
