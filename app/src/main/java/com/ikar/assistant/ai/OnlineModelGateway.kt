@@ -66,7 +66,7 @@ data class BackendHealth(
  * no server credential is embedded in the APK or persisted by this client.
  * Call network methods only from Dispatchers.IO.
  */
-object RenderOnlineModelGateway {
+object IkarOnlineModelGateway {
     private const val BASE_URL = "https://ikar-cloudflare-worker-v4gl.vercel.app"
     private const val ENDPOINT = "$BASE_URL/v1/chat"
     private const val HEALTH_ENDPOINT = "$BASE_URL/health"
