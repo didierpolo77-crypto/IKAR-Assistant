@@ -285,6 +285,11 @@ private fun IkarHome(
     var aiSecurityAnalysis by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     var fileScanReport by remember { mutableStateOf<FileScanReport?>(null) }
     var fileScanRunning by remember { mutableStateOf(false) }
+    var lastScannedUri by remember { mutableStateOf<Uri?>(null) }
+    var quarantineStatus by remember { mutableStateOf("Aucun fichier en quarantaine.") }
+    var quarantineItems by remember { mutableStateOf(FileQuarantineStore.list(context)) }
+    var antivirusHistory by remember { mutableStateOf(AntivirusScanHistory.list(context)) }
+    var selectedQuarantineId by remember { mutableStateOf<String?>(null) }
     var folderReport by remember { mutableStateOf<FolderRiskReport?>(null) }
     var folderScanRunning by remember { mutableStateOf(false) }
     var vaultBackupStatus by remember { mutableStateOf("Aucune copie de récupération sélectionnée.") }
@@ -544,12 +549,14 @@ private fun IkarHome(
         if (uri != null && !fileScanRunning) {
             fileScanRunning = true
             fileScanReport = null
+            lastScannedUri = uri
             scope.launch {
                 try {
                     val report = withContext(Dispatchers.IO) {
                         FileScanner.scan(context.applicationContext, uri)
                     }
                     fileScanReport = report
+                    antivirusHistory = withContext(Dispatchers.IO) { AntivirusScanHistory.list(context.applicationContext) }
                     if (speakReplies && report.indicators.isNotEmpty()) {
                         onSpeak("Analyse IKAR terminée. ${report.verdict}. ${report.indicators.take(2).joinToString(". ")}")
                     }
@@ -583,6 +590,20 @@ private fun IkarHome(
             }
         }
     }
+    val quarantineRestorePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { treeUri ->
+        val itemId = selectedQuarantineId
+        if (treeUri != null && itemId != null) {
+            scope.launch {
+                try {
+                    withContext(Dispatchers.IO) { FileQuarantineStore.restore(context.applicationContext, itemId, treeUri) }
+                    quarantineStatus = "Fichier restauré dans le dossier choisi. La copie chiffrée reste en quarantaine."
+                } catch (error: Exception) {
+                    quarantineStatus = "Restauration impossible : ${error.localizedMessage ?: "erreur inconnue"}"
+                }
+            }
+        }
+    }
+
     val recoveryRestoreFolderPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         if (uri != null) {
             val backupId = selectedVaultBackupId ?: vaultBackupIds.lastOrNull()?.id
@@ -737,8 +758,52 @@ private fun IkarHome(
                     } else {
                         report.indicators.forEach { Text("• $it", style = MaterialTheme.typography.bodySmall) }
                     }
-                    Text("IKAR compare maintenant le SHA-256 aux empreintes URLhaus téléchargées si la base est configurée. Une correspondance est un indicateur à examiner, pas une preuve absolue. YARA et ClamAV ne sont pas encore intégrés.", style = MaterialTheme.typography.bodySmall)
+                    Text("Le contrôle YARA local utilise actuellement un évaluateur compatible avec un sous-ensemble de règles ASCII ; ce n'est pas encore la bibliothèque officielle libyara. ClamAV natif n'est pas encore embarqué : IKAR ne prétend pas l'avoir exécuté.", style = MaterialTheme.typography.bodySmall)
+                    if (report.indicators.isNotEmpty() && lastScannedUri != null) {
+                        Button(onClick = {
+                            val source = lastScannedUri
+                            if (source != null) {
+                                scope.launch {
+                                    try {
+                                        val item = withContext(Dispatchers.IO) { FileQuarantineStore.quarantine(context.applicationContext, source) }
+                                        quarantineItems = withContext(Dispatchers.IO) { FileQuarantineStore.list(context.applicationContext) }
+                                        quarantineStatus = "Copie chiffrée isolée : ${item.name}. Le fichier original n'a pas été supprimé."
+                                    } catch (error: Exception) {
+                                        quarantineStatus = "Mise en quarantaine impossible : ${error.localizedMessage ?: "erreur inconnue"}"
+                                    }
+                                }
+                            }
+                        }, modifier = Modifier.fillMaxWidth()) {
+                            Text("Créer une copie chiffrée en quarantaine")
+                        }
+                    }
                 } ?: Text("Aucun fichier analysé pour le moment.", style = MaterialTheme.typography.bodySmall)
+                Divider()
+                Text("Moteur ClamAV", style = MaterialTheme.typography.titleMedium)
+                Text(ClamAvEngineStatus.inspect(context).detail, style = MaterialTheme.typography.bodySmall)
+                Divider()
+                Text("Quarantaine chiffrée (${quarantineItems.size})", style = MaterialTheme.typography.titleMedium)
+                Text(quarantineStatus, style = MaterialTheme.typography.bodySmall)
+                quarantineItems.take(5).forEach { item ->
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(item.name, style = MaterialTheme.typography.bodyMedium)
+                        Text("${item.size / 1024} Ko · copie privée chiffrée", style = MaterialTheme.typography.bodySmall)
+                        Button(onClick = {
+                            selectedQuarantineId = item.id
+                            quarantineRestorePicker.launch(null)
+                        }) { Text("Restaurer une copie") }
+                    }
+                }
+                Divider()
+                Text("Historique des analyses (${antivirusHistory.size})", style = MaterialTheme.typography.titleMedium)
+                antivirusHistory.take(5).forEach { entry ->
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(entry.fileName + " — " + entry.verdict, style = MaterialTheme.typography.bodySmall)
+                        Text("SHA-256 : " + entry.sha256, style = MaterialTheme.typography.labelSmall)
+                        Text("Moteurs : " + entry.engines, style = MaterialTheme.typography.labelSmall)
+                    }
+                }
+                Text("L'historique conserve uniquement les noms, empreintes, résultats et moteurs déclarés ; aucun contenu de fichier n'y est enregistré.", style = MaterialTheme.typography.bodySmall)
             }
         }
 
