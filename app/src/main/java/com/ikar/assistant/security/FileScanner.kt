@@ -86,7 +86,8 @@ object FileScanner {
 
             // Run local YARA-compatible starter rules on-device. Skip files above 16 MB
             // to avoid loading large samples into memory on low-RAM Android devices.
-            val yaraMatches = if (temp.length() <= 16L * 1024L * 1024L) {
+            val yaraWasRun = temp.length() <= 16L * 1024L * 1024L
+            val yaraMatches = if (yaraWasRun) {
                 LocalYaraRuleEngine.scan(context, temp)
             } else emptyList()
             yaraMatches.forEach { match ->
@@ -155,7 +156,11 @@ object FileScanner {
             }
             val engines = buildList {
                 add("SHA-256")
-                add("YARA-compatible local (${yaraMatches.size} règle(s) déclenchée(s))")
+                add(if (yaraWasRun) {
+                    "YARA-compatible local exécuté (${yaraMatches.size} règle(s) déclenchée(s))"
+                } else {
+                    "YARA-compatible local non exécuté (fichier supérieur à 16 Mo)"
+                })
                 add("URLhaus SHA-256 (${if (ThreatIntelStore.hashCount(context) > 0) "base présente" else "base absente"})")
                 add("ClamAV : ${clamAvStatus.detail}")
             }
