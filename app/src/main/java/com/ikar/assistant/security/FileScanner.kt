@@ -84,6 +84,16 @@ object FileScanner {
             if (apkByName && !isZip) indicators += "Extension APK mais signature ZIP absente : fichier à vérifier."
             if (total == 0L) indicators += "Fichier vide."
 
+            // Run local YARA-compatible starter rules on-device. Skip files above 16 MB
+            // to avoid loading large samples into memory on low-RAM Android devices.
+            val yaraMatches = if (temp.length() <= 16L * 1024L * 1024L) {
+                LocalYaraRuleEngine.scan(context, temp)
+            } else emptyList()
+            yaraMatches.forEach { match ->
+                indicators += "Règle YARA locale ${match.rule} : ${match.detail}"
+            }
+            val clamAvStatus = ClamAvEngineStatus.inspect(context)
+
             var packageName: String? = null
             var apkVersionName: String? = null
             var apkVersionCode: Long? = null
@@ -138,10 +148,18 @@ object FileScanner {
             val verdict = when {
                 indicators.any { it.contains("signature ZIP absente") || it.contains("n'a pas pu lire") || it.contains("pas été reconnu") } ->
                     "Fichier invalide ou non vérifiable"
+                yaraMatches.isNotEmpty() -> "Règle YARA locale déclenchée — vérification recommandée"
                 knownPayloadIndicator -> "Correspondance avec un indicateur URLhaus — vérification recommandée"
                 indicators.isNotEmpty() -> "Vérification recommandée"
-                else -> "Aucun indicateur suspect détecté par les règles locales"
+                else -> "Aucun indicateur détecté par les règles locales disponibles"
             }
+            val engines = buildList {
+                add("SHA-256")
+                add("YARA-compatible local (${yaraMatches.size} règle(s) déclenchée(s))")
+                add("URLhaus SHA-256 (${if (ThreatIntelStore.hashCount(context) > 0) "base présente" else "base absente"})")
+                add("ClamAV : ${clamAvStatus.detail}")
+            }
+            AntivirusScanHistory.record(context, name, hash, verdict, engines)
             val updateAssessment = if (isApk && packageName != null) {
                 assessUpdateCompatibility(context, temp.absolutePath, packageName)
             } else null
