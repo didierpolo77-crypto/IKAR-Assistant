@@ -21,6 +21,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
@@ -424,6 +425,9 @@ private fun IkarHome(
     val securityRequester = remember { BringIntoViewRequester() }
     val assistantRequester = remember { BringIntoViewRequester() }
     val toolsRequester = remember { BringIntoViewRequester() }
+    val dnsFirewallRequester = remember { BringIntoViewRequester() }
+    val threatIntelRequester = remember { BringIntoViewRequester() }
+    val deviceRequester = remember { BringIntoViewRequester() }
 
     suspend fun refreshMemories() {
         val allEntries = withContext(Dispatchers.IO) { memoryDao.getAll() }
@@ -639,7 +643,33 @@ private fun IkarHome(
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 IkarBrandHeader()
                 IkarWelcomePanel()
-                IkarModuleDashboard(openTasks = productivityItems.count { it.content.startsWith("OPEN|") })
+                IkarModuleDashboard(
+                    openTasks = productivityItems.count { it.content.startsWith("OPEN|") },
+                    onOpenAssistant = {
+                        selectedNavigation = "Assistant"
+                        scope.launch { assistantRequester.bringIntoView() }
+                    },
+                    onOpenSearch = {
+                        selectedNavigation = "Assistant"
+                        scope.launch { assistantRequester.bringIntoView() }
+                    },
+                    onOpenSecurity = {
+                        selectedNavigation = "Sécurité"
+                        scope.launch { securityRequester.bringIntoView() }
+                    },
+                    onOpenProductivity = {
+                        selectedNavigation = "Outils"
+                        scope.launch { toolsRequester.bringIntoView() }
+                    },
+                    onOpenWeb = {
+                        selectedNavigation = "Sécurité"
+                        scope.launch { dnsFirewallRequester.bringIntoView() }
+                    },
+                    onOpenDevice = {
+                        selectedNavigation = "Sécurité"
+                        scope.launch { deviceRequester.bringIntoView() }
+                    }
+                )
                 PendingActionCenter(memoryDao = memoryDao)
             }
         }
@@ -813,7 +843,7 @@ private fun IkarHome(
 
         Card(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text("Diagnostic de l'appareil", style = MaterialTheme.typography.titleMedium)
+                Text("Diagnostic de l'appareil", modifier = Modifier.bringIntoViewRequester(deviceRequester), style = MaterialTheme.typography.titleMedium)
                 Text("Processus IKAR : ${if (runtimeSnapshot.is32BitProcess) "32 bits" else "64 bits"} · ABI : ${runtimeSnapshot.supportedAbis.joinToString()}")
                 Text("RAM totale : ${runtimeSnapshot.totalMemoryMb} Mo · mémoire IKAR (PSS) : ${runtimeSnapshot.appPssKb / 1024} Mo")
                 Text("Batterie : ${runtimeSnapshot.batteryPercent}% · économie d'énergie : ${if (runtimeSnapshot.powerSaveMode) "activée" else "désactivée"}")
@@ -889,7 +919,7 @@ private fun IkarHome(
                     Text("Attention : une rafale de changements a été observée récemment dans les médias partagés. Lance un audit du dossier choisi.", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                 }
                 Divider()
-                Text("Base de signatures et réputation", style = MaterialTheme.typography.titleMedium)
+                Text("Base de signatures et réputation", modifier = Modifier.bringIntoViewRequester(threatIntelRequester), style = MaterialTheme.typography.titleMedium)
                 Text("Source : URLhaus (URLs de distribution de malwares actives). Une clé gratuite abuse.ch est nécessaire. La clé est chiffrée avec Android Keystore sur cet appareil ; elle n'est pas transmise à IKAR ni à son serveur.", style = MaterialTheme.typography.bodySmall)
                 Button(onClick = {
                     runCatching {
@@ -931,7 +961,7 @@ private fun IkarHome(
                 Text("URLs actives : $threatIntelCount · empreintes SHA-256 : ${ThreatIntelStore.hashCount(context)} · Dernière mise à jour : ${ThreatIntelStore.lastUpdatedAt(context).takeIf { it > 0 }?.let { java.text.DateFormat.getDateTimeInstance().format(java.util.Date(it)) } ?: "jamais"}", style = MaterialTheme.typography.bodySmall)
                 Text("Sans clé valide, aucune base URLhaus n'est téléchargée et seules les règles locales restent actives.", style = MaterialTheme.typography.bodySmall)
                 Divider()
-                Text("Pare-feu réseau facultatif", style = MaterialTheme.typography.titleMedium)
+                Text("Pare-feu réseau facultatif", modifier = Modifier.bringIntoViewRequester(dnsFirewallRequester), style = MaterialTheme.typography.titleMedium)
                 Text("IKAR propose un filtre DNS local via VPNService. Il bloque les domaines présents dans la base URLhaus locale et relaie les autres requêtes DNS IPv4. Le filtre DNS bloque uniquement les domaines explicitement publiés comme indicateurs de domaine racine ; les indicateurs URLhaus visant un chemin précis ne sont pas bloqués au niveau DNS. Les connexions directes, DNS chiffrés (DoH/DoT), DNS TCP et certains flux IPv6 peuvent contourner ce filtre. Ce n'est pas un pare-feu complet.", style = MaterialTheme.typography.bodySmall)
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text(if (firewallRunning) "Filtre DNS actif" else "Filtre DNS désactivé")
@@ -1510,7 +1540,15 @@ private fun IkarWelcomePanel() {
 }
 
 @Composable
-private fun IkarModuleDashboard(openTasks: Int) {
+private fun IkarModuleDashboard(
+    openTasks: Int,
+    onOpenAssistant: () -> Unit,
+    onOpenSearch: () -> Unit,
+    onOpenSecurity: () -> Unit,
+    onOpenProductivity: () -> Unit,
+    onOpenWeb: () -> Unit,
+    onOpenDevice: () -> Unit
+) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(
             Modifier.fillMaxWidth(),
@@ -1532,16 +1570,16 @@ private fun IkarModuleDashboard(openTasks: Int) {
             )
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            IkarModuleTile("✦", "Assistant IA", "Discussion, mémoire et voix", "Local et connecté", Color(0xFF284D3B), Modifier.weight(1f))
-            IkarModuleTile("⌕", "Recherche", "Web et sources documentaires", "Internet requis", Color(0xFF244653), Modifier.weight(1f))
+            IkarModuleTile("✦", "Assistant IA", "Discussion, mémoire et voix", "Appuyer pour ouvrir", Color(0xFF284D3B), Modifier.weight(1f), onOpenAssistant)
+            IkarModuleTile("⌕", "Recherche", "Web et sources documentaires", "Appuyer pour ouvrir", Color(0xFF244653), Modifier.weight(1f), onOpenSearch)
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            IkarModuleTile("⬡", "Sécurité", "Fichiers, applications et liens", "Contrôles locaux", Color(0xFF4B4225), Modifier.weight(1f))
-            IkarModuleTile("▣", "Productivité", "$openTasks tâche(s) à terminer", "Notes et rappels", Color(0xFF40345A), Modifier.weight(1f))
+            IkarModuleTile("⬡", "Sécurité", "Fichiers, applications et liens", "Appuyer pour ouvrir", Color(0xFF4B4225), Modifier.weight(1f), onOpenSecurity)
+            IkarModuleTile("▣", "Productivité", "$openTasks tâche(s) à terminer", "Appuyer pour ouvrir", Color(0xFF40345A), Modifier.weight(1f), onOpenProductivity)
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            IkarModuleTile("◎", "Protection Web", "Navigation et filtrage DNS", "Limites Android", Color(0xFF234C49), Modifier.weight(1f))
-            IkarModuleTile("⌁", "Appareil", "Diagnostics et autorisations", "Selon permissions", Color(0xFF34445A), Modifier.weight(1f))
+            IkarModuleTile("◎", "Protection Web", "Navigation et filtrage DNS", "Accéder aux réglages DNS", Color(0xFF234C49), Modifier.weight(1f), onOpenWeb)
+            IkarModuleTile("⌁", "Appareil", "Diagnostics et autorisations", "Appuyer pour ouvrir", Color(0xFF34445A), Modifier.weight(1f), onOpenDevice)
         }
         Card(
             modifier = Modifier.fillMaxWidth(),
@@ -1575,10 +1613,11 @@ private fun IkarModuleTile(
     detail: String,
     status: String,
     tint: Color,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
 ) {
     Card(
-        modifier = modifier,
+        modifier = modifier.clickable(onClick = onClick),
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = Color(0xFF111D17)),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
