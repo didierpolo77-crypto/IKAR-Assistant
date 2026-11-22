@@ -57,3 +57,16 @@ Cette vue décrit honnêtement l'état des fonctions. Elle ne signifie pas que l
 - Présentation plus lisible des espaces Assistant IA, Recherche, Sécurité, Productivité, Protection Web et Appareil.
 - Les modules existants sont conservés ; les libellés de disponibilité ne doivent pas être interprétés comme une garantie de protection complète.
 - Le workflow Android s'exécute également sur les pull requests vers `main` afin de vérifier les changements avant intégration.
+
+
+## Antivirus local — étape de développement (0.68.0 en préparation)
+
+- L'analyse de fichiers conserve le calcul SHA-256 et la comparaison avec les empreintes URLhaus déjà téléchargées.
+- Un évaluateur local de règles YARA compatibles est ajouté pour un sous-ensemble documenté : chaînes ASCII littérales et conditions « any of them », « all of them » ou « N of them ». Les règles de démarrage sont heuristiques et peuvent produire des faux positifs. Ce composant n'est pas la bibliothèque officielle libyara.
+- Les fichiers de 16 Mo ou moins sont évalués par ces règles ; les fichiers plus volumineux sont analysés par les autres contrôles disponibles, sans chargement intégral pour éviter une forte consommation mémoire.
+- La quarantaine crée une copie chiffrée AES-GCM dans le stockage privé d'IKAR. Le fichier source n'est jamais supprimé automatiquement. La restauration crée un nouveau fichier dans un dossier choisi par l'utilisateur.
+- L'historique local conserve jusqu'à 200 métadonnées d'analyse (nom, SHA-256, verdict, moteurs déclarés et date), sans contenu de fichier.
+- La base URLhaus existante peut actualiser les URLs actives et les empreintes SHA-256 avec une Auth-Key fournie par l'utilisateur. Cette base ne représente pas toutes les familles de malwares.
+- ClamAV n'est pas encore embarqué dans l'APK. L'application affiche explicitement son indisponibilité et n'exécute aucune fausse analyse ClamAV. L'intégration native ARMv7, ses dépendances, son pont JNI et les bases de signatures doivent être construits et testés séparément avant activation.
+
+Les résultats « aucun indicateur détecté » ne constituent pas une garantie d'innocuité. Les analyses restent limitées aux fichiers que l'utilisateur peut explicitement ouvrir via le sélecteur Android.
