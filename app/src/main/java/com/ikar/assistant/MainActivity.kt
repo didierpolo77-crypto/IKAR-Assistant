@@ -801,7 +801,7 @@ private fun IkarHome(
                 Text("Historique des analyses (${antivirusHistory.size})", style = MaterialTheme.typography.titleMedium)
                 antivirusHistory.take(5).forEach { entry ->
                     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        Text(entry.fileName + " — " + entry.verdict, style = MaterialTheme.typography.bodySmall)
+                        Text(entry.name + " — " + entry.verdict, style = MaterialTheme.typography.bodySmall)
                         Text("SHA-256 : " + entry.sha256, style = MaterialTheme.typography.labelSmall)
                         Text("Moteurs : " + entry.engines, style = MaterialTheme.typography.labelSmall)
                     }
