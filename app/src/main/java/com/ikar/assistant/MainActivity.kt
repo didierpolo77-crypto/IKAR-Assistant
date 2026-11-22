@@ -77,6 +77,9 @@ import com.ikar.assistant.security.SpywareScanner
 import com.ikar.assistant.security.IkarSafeBrowserActivity
 import com.ikar.assistant.security.SecurityReport
 import com.ikar.assistant.security.FileScanner
+import com.ikar.assistant.security.FileQuarantineStore
+import com.ikar.assistant.security.AntivirusScanHistory
+import com.ikar.assistant.security.ClamAvEngineStatus
 import com.ikar.assistant.security.FileScanReport
 import com.ikar.assistant.security.SecurityCenter
 import com.ikar.assistant.security.PendingActionCenter
