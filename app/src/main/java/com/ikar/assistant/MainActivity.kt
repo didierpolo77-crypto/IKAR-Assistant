@@ -585,7 +585,7 @@ private fun IkarHome(
     }
     val recoveryRestoreFolderPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         if (uri != null) {
-            val backupId = selectedVaultBackupId ?: vaultBackupIds.lastOrNull()
+            val backupId = selectedVaultBackupId ?: vaultBackupIds.lastOrNull()?.id
             if (backupId == null) {
                 vaultBackupStatus = "Aucune copie disponible à restaurer."
             } else {
