@@ -1494,47 +1494,60 @@ private fun IkarBrandHeader() {
             modifier = Modifier.background(Color(0xFF14251B), RoundedCornerShape(12.dp)).padding(horizontal = 11.dp, vertical = 7.dp)
         ) {
             Text("VERSION", style = MaterialTheme.typography.labelSmall, color = Color(0xFF9EB9A5))
-            Text("0.67.0", color = Color(0xFFB7F36B), fontWeight = FontWeight.Bold)
+            Text("0.68.0", color = Color(0xFFB7F36B), fontWeight = FontWeight.Bold)
         }
     }
 }
 
 @Composable
 private fun IkarWelcomePanel() {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(
-                Brush.linearGradient(listOf(Color(0xFF183B2A), Color(0xFF10251D), Color(0xFF101A18))),
-                RoundedCornerShape(26.dp)
-            )
-            .border(1.dp, Color(0xFF37684A), RoundedCornerShape(26.dp))
-            .padding(20.dp)
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(28.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF0D1711)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text(
-                "●  ESPACE PERSONNEL IKAR",
-                color = Color(0xFFB7F36B),
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.Bold
-            )
-            Text(
-                "La sécurité et l'intelligence, réunies.",
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.ExtraBold,
-                color = Color.White
-            )
-            Text(
-                "Assistant, protection numérique et outils du quotidien depuis un seul espace.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = Color(0xFFD1E4D7)
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("LOCAL", color = Color(0xFFB7F36B), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold,
-                    modifier = Modifier.background(Color(0xFF244B32), RoundedCornerShape(30.dp)).padding(horizontal = 10.dp, vertical = 6.dp))
-                Text("CONNECTÉ", color = Color(0xFF9ADBE2), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold,
-                    modifier = Modifier.background(Color(0xFF1B3C43), RoundedCornerShape(30.dp)).padding(horizontal = 10.dp, vertical = 6.dp))
+        Column(
+            modifier = Modifier.fillMaxWidth()
+                .border(1.dp, Color(0xFF294B35), RoundedCornerShape(28.dp))
+                .padding(20.dp),
+            horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text("CENTRE DE SÉCURITÉ", color = Color(0xFF9DB9A5),
+                    style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                Text("IKAR PROTECT", color = Color(0xFFB7F36B),
+                    style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
             }
+            Box(
+                modifier = Modifier.size(116.dp)
+                    .background(
+                        Brush.radialGradient(listOf(Color(0xFF315E3B), Color(0xFF14291B), Color(0xFF0D1711))),
+                        RoundedCornerShape(60.dp)
+                    )
+                    .border(2.dp, Color(0xFF6FAE55), RoundedCornerShape(60.dp)),
+                contentAlignment = androidx.compose.ui.Alignment.Center
+            ) {
+                Text("⬡", color = Color(0xFFB7F36B), style = MaterialTheme.typography.displayLarge,
+                    fontWeight = FontWeight.Black)
+            }
+            Text("Votre espace de protection", color = Color.White,
+                style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold)
+            Text("Consultez les modules et lancez les contrôles disponibles.",
+                color = Color(0xFFB9CBBE), style = MaterialTheme.typography.bodyMedium)
+            Row(
+                Modifier.fillMaxWidth().background(Color(0xFF17271C), RoundedCornerShape(14.dp)).padding(12.dp),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+            ) {
+                Box(Modifier.size(8.dp).background(Color(0xFFE2B34D), RoundedCornerShape(8.dp)))
+                Spacer(Modifier.size(8.dp))
+                Text("État global : vérification nécessaire", color = Color(0xFFE9C77D),
+                    style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+            }
+            Text("Les protections ne sont pas toutes actives en permanence. Vérifiez chaque module et ses autorisations.",
+                color = Color(0xFF91A697), style = MaterialTheme.typography.bodySmall)
         }
     }
 }
@@ -1557,10 +1570,10 @@ private fun IkarModuleDashboard(
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 Text("VOTRE TABLEAU DE BORD", color = Color(0xFF9DB9A5), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
-                Text("Accès à vos modules", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Color.White)
+                Text("Vos protections", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Color.White)
             }
             Text(
-                "6 ESPACES",
+                "6 MODULES",
                 color = Color(0xFFB7F36B),
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.Bold,
