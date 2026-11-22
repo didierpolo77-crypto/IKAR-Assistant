@@ -49,3 +49,11 @@ Cette vue décrit honnêtement l'état des fonctions. Elle ne signifie pas que l
 - Un rappel peut être programmé après un délai choisi en minutes (1 minute à 30 jours).
 - Les notifications sont exécutées par WorkManager ; Android peut les différer selon Doze, les restrictions batterie et les autorisations.
 - Les rappels ne sont pas une alarme à l'heure exacte. L'autorisation de notifications Android 13+ doit être accordée pour afficher les notifications.
+
+
+## Version 0.67.0 — refonte de l'accueil
+
+- Refonte visuelle de l'en-tête, du panneau d'accueil et du tableau de bord en thème sombre vert.
+- Présentation plus lisible des espaces Assistant IA, Recherche, Sécurité, Productivité, Protection Web et Appareil.
+- Les modules existants sont conservés ; les libellés de disponibilité ne doivent pas être interprétés comme une garantie de protection complète.
+- Le workflow Android s'exécute également sur les pull requests vers `main` afin de vérifier les changements avant intégration.
