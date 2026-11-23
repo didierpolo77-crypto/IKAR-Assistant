@@ -70,3 +70,11 @@ Cette vue décrit honnêtement l'état des fonctions. Elle ne signifie pas que l
 - ClamAV n'est pas encore embarqué dans l'APK. L'application affiche explicitement son indisponibilité et n'exécute aucune fausse analyse ClamAV. L'intégration native ARMv7, ses dépendances, son pont JNI et les bases de signatures doivent être construits et testés séparément avant activation.
 
 Les résultats « aucun indicateur détecté » ne constituent pas une garantie d'innocuité. Les analyses restent limitées aux fichiers que l'utilisateur peut explicitement ouvrir via le sélecteur Android.
+
+
+## Version 0.69.0 — mémorisation facultative du jeton
+
+- Le jeton d'accès API IKAR peut rester non mémorisé (comportement par défaut) ou être conservé sur demande.
+- Si l'utilisateur active cette option, le jeton est chiffré en AES-GCM avec une clé conservée dans Android Keystore.
+- Désactiver l'option efface la valeur chiffrée et la clé locale.
+- Le jeton n'est jamais écrit en clair dans les préférences, les journaux ou l'APK. Le transport vers le backend reste en HTTPS.
