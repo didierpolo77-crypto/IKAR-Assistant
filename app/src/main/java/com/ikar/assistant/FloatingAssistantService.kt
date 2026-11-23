@@ -248,7 +248,7 @@ class FloatingAssistantService : Service() {
         val scroll = ScrollView(this).apply {
             isFillViewport = true
             clipToPadding = false
-            addView(transcript, FrameLayout.LayoutParams(-1, -2))
+            addView(transcript, android.view.ViewGroup.LayoutParams(-1, -2))
         }
         root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
         appendChatBubble(
