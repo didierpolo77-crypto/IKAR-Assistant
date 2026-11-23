@@ -59,6 +59,14 @@ Cette vue décrit honnêtement l'état des fonctions. Elle ne signifie pas que l
 - Le workflow Android s'exécute également sur les pull requests vers `main` afin de vérifier les changements avant intégration.
 
 
+## Version 0.70.0 — moteur natif et règles YARA Forge
+
+- Passage à la bibliothèque officielle libyara 4.5.0 via JNI pour ARMv7.
+- Ajout du téléchargement, de la validation et du stockage hors ligne du paquet YARA Forge Core.
+- Ajout de la mise à jour automatique quotidienne et du bouton d'actualisation manuelle.
+- Le contrôle CI compile le paquet de règles avec la même version YARA et la configuration sans crypto utilisée par le build Android.
+- Le test d'exécution sur le téléphone physique reste une étape distincte après livraison de l'APK.
+
 ## Antivirus local — libyara et YARA Forge (0.69.0)
 
 - Le moteur officiel libyara 4.5.0 est compilé pour Android ARMv7 via NDK/JNI et embarqué dans l'APK sous `lib/armeabi-v7a/libikar_yara.so`. Le workflow contrôle explicitement sa présence et son architecture ELF.
