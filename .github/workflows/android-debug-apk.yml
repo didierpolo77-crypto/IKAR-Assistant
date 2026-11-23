@@ -29,7 +29,7 @@ jobs:
         run: gradle testDebugUnitTest --no-daemon
       - name: Build debug APK
         run: gradle assembleDebug --no-daemon
-      - name: Verify APK and 32-bit ARM native compatibility
+      - name: Verify APK and ARMv7 ABI presence
         shell: bash
         run: |
           APK=app/build/outputs/apk/debug/app-debug.apk
