@@ -20,7 +20,8 @@ data class FileScanReport(
     val certificateSha256: String? = null,
     val indicators: List<String>,
     val verdict: String,
-    val updateAssessment: String? = null
+    val updateAssessment: String? = null,
+    val malwareBazaar: MalwareBazaarReport? = null
 )
 
 /**
@@ -98,7 +99,14 @@ object FileScanner {
                 else -> emptyList()
             }
             yaraMatches.forEach { match ->
-                indicators += "Règle YARA locale ${match.rule} : ${match.detail}"
+                indicators += "Règle YARA locale \${match.rule} : \${match.detail}"
+            }
+            // Enrich local YARA/hash results with MalwareBazaar metadata. Only hashes and rule names leave the device.
+            val malwareBazaar = MalwareBazaarClient.enrich(context, hash, yaraMatches.map { it.rule })
+            if (malwareBazaar?.exactHashMatch == true) {
+                indicators += "Empreinte SHA-256 confirmée dans MalwareBazaar\${malwareBazaar.family?.let { " : famille $it" } ?: ""}."
+            } else if (malwareBazaar?.relatedRuleFamilies?.isNotEmpty() == true) {
+                indicators += "Familles associées aux règles YARA (références MalwareBazaar, pas identification exacte) : \${malwareBazaar.relatedRuleFamilies.values.flatten().distinct().joinToString(", ")}."
             }
             val clamAvStatus = ClamAvEngineStatus.inspect(context)
 
@@ -156,6 +164,7 @@ object FileScanner {
             val verdict = when {
                 indicators.any { it.contains("signature ZIP absente") || it.contains("n'a pas pu lire") || it.contains("pas été reconnu") } ->
                     "Fichier invalide ou non vérifiable"
+                malwareBazaar?.exactHashMatch == true -> "Malware identifié par empreinte SHA-256 — ${malwareBazaar.family ?: "famille non renseignée"}"
                 yaraMatches.isNotEmpty() -> "Règle YARA locale déclenchée — vérification recommandée"
                 knownPayloadIndicator -> "Correspondance avec un indicateur URLhaus — vérification recommandée"
                 indicators.isNotEmpty() -> "Vérification recommandée"
@@ -190,7 +199,8 @@ object FileScanner {
                 certificateSha256 = if (isApk) certificateSha256 else null,
                 indicators = indicators,
                 verdict = verdict,
-                updateAssessment = updateAssessment
+                updateAssessment = updateAssessment,
+                malwareBazaar = malwareBazaar
             )
         } finally {
             temp.delete()
