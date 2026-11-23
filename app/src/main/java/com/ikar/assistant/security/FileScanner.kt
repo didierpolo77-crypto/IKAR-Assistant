@@ -84,12 +84,19 @@ object FileScanner {
             if (apkByName && !isZip) indicators += "Extension APK mais signature ZIP absente : fichier à vérifier."
             if (total == 0L) indicators += "Fichier vide."
 
-            // Run local YARA-compatible starter rules on-device. Skip files above 16 MB
-            // to avoid loading large samples into memory on low-RAM Android devices.
+            // Prefer official native libyara when packaged. Keep the Kotlin subset as an
+            // explicit fallback until the native engine has passed runtime checks on-device.
             val yaraWasRun = temp.length() <= 16L * 1024L * 1024L
-            val yaraMatches = if (yaraWasRun) {
-                LocalYaraRuleEngine.scan(context, temp)
-            } else emptyList()
+            val nativeYara = if (yaraWasRun) NativeYaraEngine.scan(context, temp)
+                else NativeYaraEngine.ScanResult(false, error = "Fichier supérieur à 16 Mo : limite de sécurité ARM32.")
+            val usingOfficialYara = nativeYara.available
+            val yaraMatches = when {
+                usingOfficialYara -> nativeYara.matches.map {
+                    LocalYaraRuleEngine.Match(it, "déclenchée par libyara 4.5.0 natif.")
+                }
+                yaraWasRun -> LocalYaraRuleEngine.scan(context, temp)
+                else -> emptyList()
+            }
             yaraMatches.forEach { match ->
                 indicators += "Règle YARA locale ${match.rule} : ${match.detail}"
             }
@@ -156,10 +163,10 @@ object FileScanner {
             }
             val engines = buildList {
                 add("SHA-256")
-                add(if (yaraWasRun) {
-                    "YARA-compatible local exécuté (${yaraMatches.size} règle(s) déclenchée(s))"
-                } else {
-                    "YARA-compatible local non exécuté (fichier supérieur à 16 Mo)"
+                add(when {
+                    usingOfficialYara -> "libyara 4.5.0 officiel ARMv7 exécuté (${yaraMatches.size} règle(s) déclenchée(s))"
+                    yaraWasRun -> "Moteur Kotlin YARA-compatible (sous-ensemble) exécuté (${yaraMatches.size} règle(s)); libyara indisponible : ${nativeYara.error ?: "raison inconnue"}"
+                    else -> "Moteur YARA non exécuté : ${nativeYara.error ?: "limite de sécurité ARM32"}"
                 })
                 add("URLhaus SHA-256 (${if (ThreatIntelStore.hashCount(context) > 0) "base présente" else "base absente"})")
                 add("ClamAV : ${clamAvStatus.detail}")
