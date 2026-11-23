@@ -337,7 +337,7 @@ private fun IkarHome(
     var securityEvents by remember { mutableStateOf<List<MemoryEntry>>(emptyList()) }
     var threatIntelAuthKey by remember { mutableStateOf("") }
     var malwareBazaarApiKey by remember { mutableStateOf("") }
-    var malwareBazaarStatus by remember { mutableStateOf(if (MalwareBazaarStore.hasAuthKey(context)) "Clé MalwareBazaar enregistrée de façon chiffrée." else "Clé MalwareBazaar non configurée.") }
+    var malwareBazaarStatus by remember { mutableStateOf(if (MalwareBazaarStore.hasAuthKey(context)) MalwareBazaarIntelStore.status(context) else "Clé MalwareBazaar non configurée.") }
     var threatIntelStatus by remember { mutableStateOf("Base de réputation non configurée.") }
     var yaraForgeStatus by remember { mutableStateOf(YaraForgeRulesStatus.status(context)) }
     var threatIntelCount by remember { mutableIntStateOf(ThreatIntelStore.indicatorCount(context)) }
