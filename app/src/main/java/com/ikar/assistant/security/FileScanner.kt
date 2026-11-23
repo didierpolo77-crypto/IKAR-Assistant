@@ -29,7 +29,6 @@ data class FileScanReport(
  * A hash is an identifier, not a malware verdict. Heuristics are indicators only.
  */
 object FileScanner {
-    private const val MAX_FILE_BYTES = 100L * 1024L * 1024L
 
     private val sensitivePermissions = mapOf(
         "android.permission.RECORD_AUDIO" to "Microphone",
@@ -62,7 +61,6 @@ object FileScanner {
                         val count = input.read(buffer)
                         if (count < 0) break
                         total += count
-                        require(total <= MAX_FILE_BYTES) { "Fichier trop volumineux : limite de 100 Mo." }
                         digest.update(buffer, 0, count)
                         output.write(buffer, 0, count)
                     }
@@ -85,18 +83,17 @@ object FileScanner {
             if (apkByName && !isZip) indicators += "Extension APK mais signature ZIP absente : fichier à vérifier."
             if (total == 0L) indicators += "Fichier vide."
 
-            // Prefer official native libyara when packaged. Keep the Kotlin subset as an
-            // explicit fallback until the native engine has passed runtime checks on-device.
-            val yaraWasRun = temp.length() <= 16L * 1024L * 1024L
-            val nativeYara = if (yaraWasRun) NativeYaraEngine.scan(context, temp)
-                else NativeYaraEngine.ScanResult(false, error = "Fichier supérieur à 16 Mo : limite de sécurité ARM32.")
+            // No artificial file-size cutoff: libyara scans the file path directly.
+            // If native libyara is unavailable, the local fallback also streams fixed-size
+            // chunks instead of loading the whole file into the 32-bit process memory.
+            val nativeYara = NativeYaraEngine.scan(context, temp)
             val usingOfficialYara = nativeYara.available
-            val yaraMatches = when {
-                usingOfficialYara -> nativeYara.matches.map {
+            val yaraMatches = if (usingOfficialYara) {
+                nativeYara.matches.map {
                     LocalYaraRuleEngine.Match(it, "déclenchée par libyara 4.5.0 natif.")
                 }
-                yaraWasRun -> LocalYaraRuleEngine.scan(context, temp)
-                else -> emptyList()
+            } else {
+                LocalYaraRuleEngine.scan(context, temp)
             }
             yaraMatches.forEach { match ->
                 indicators += "Règle YARA locale ${match.rule} : ${match.detail}"
@@ -174,8 +171,7 @@ object FileScanner {
                 add("SHA-256")
                 add(when {
                     usingOfficialYara -> "libyara 4.5.0 officiel ARMv7 exécuté (${yaraMatches.size} règle(s) déclenchée(s))"
-                    yaraWasRun -> "Moteur Kotlin YARA-compatible (sous-ensemble) exécuté (${yaraMatches.size} règle(s)); libyara indisponible : ${nativeYara.error ?: "raison inconnue"}"
-                    else -> "Moteur YARA non exécuté : ${nativeYara.error ?: "limite de sécurité ARM32"}"
+                    else -> "Moteur Kotlin YARA-compatible (sous-ensemble, lecture en flux) exécuté (${yaraMatches.size} règle(s)); libyara indisponible : ${nativeYara.error ?: "raison inconnue"}"
                 })
                 add("URLhaus SHA-256 (${if (ThreatIntelStore.hashCount(context) > 0) "base présente" else "base absente"})")
                 add("ClamAV : ${clamAvStatus.detail}")
