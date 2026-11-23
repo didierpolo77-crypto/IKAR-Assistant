@@ -1140,53 +1140,10 @@ private fun IkarHome(
                 Text("URLs actives : $threatIntelCount · empreintes SHA-256 : ${ThreatIntelStore.hashCount(context)} · Dernière mise à jour : ${ThreatIntelStore.lastUpdatedAt(context).takeIf { it > 0 }?.let { java.text.DateFormat.getDateTimeInstance().format(java.util.Date(it)) } ?: "jamais"}", style = MaterialTheme.typography.bodySmall)
                 Text("Sans clé valide, aucune base URLhaus n'est téléchargée et seules les règles locales restent actives.", style = MaterialTheme.typography.bodySmall)
                 Divider()
-                Text("Pare-feu réseau facultatif", modifier = Modifier.bringIntoViewRequester(dnsFirewallRequester), style = MaterialTheme.typography.titleMedium)
-                Text("IKAR propose un filtre DNS local via VPNService. Il bloque les domaines présents dans la base URLhaus locale et relaie les autres requêtes DNS IPv4. Le filtre DNS bloque uniquement les domaines explicitement publiés comme indicateurs de domaine racine ; les indicateurs URLhaus visant un chemin précis ne sont pas bloqués au niveau DNS. Les connexions directes, DNS chiffrés (DoH/DoT), DNS TCP et certains flux IPv6 peuvent contourner ce filtre. Ce n'est pas un pare-feu complet.", style = MaterialTheme.typography.bodySmall)
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text(if (firewallRunning) "Filtre DNS actif" else "Filtre DNS désactivé")
-                    Switch(checked = firewallRunning, onCheckedChange = { enabled ->
-                        if (enabled) {
-                            val prepare = VpnService.prepare(context)
-                            if (prepare == null) {
-                                ContextCompat.startForegroundService(context, Intent(context, IkarDnsFirewallService::class.java))
-                            } else vpnConsentLauncher.launch(prepare)
-                        } else {
-                            context.stopService(Intent(context, IkarDnsFirewallService::class.java))
-                            firewallRunning = false
-                        }
-                    })
-                }
-                Text("Android affichera sa demande d'autorisation VPN. Le filtre ne doit être considéré actif qu'après établissement du tunnel.", style = MaterialTheme.typography.bodySmall)
-                Divider()
-                Text("Protection anti-phishing", style = MaterialTheme.typography.titleMedium)
-                Text("Navigation protégée sans VPN : les liens ouverts dans le navigateur IKAR sont contrôlés par Android Safe Browsing. Pour les liens reçus dans d'autres applications, choisis IKAR dans le menu Partager ou Ouvrir avec.", style = MaterialTheme.typography.bodySmall)
-                Button(
-                    onClick = { context.startActivity(Intent(context, IkarSafeBrowserActivity::class.java)) },
-                    modifier = Modifier.fillMaxWidth()
-                ) { Text("Ouvrir le navigateur protégé IKAR") }
-                OutlinedTextField(value = linkInput, onValueChange = { linkInput = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Colle un lien à vérifier") }, singleLine = true)
-                Button(onClick = {
-                    val localReport = SecurityCenter.checkLink(linkInput)
-                    val feedMatch = ThreatIntelStore.isKnownMalicious(context, linkInput)
-                    val report = if (feedMatch) localReport.copy(
-                        suspicious = true,
-                        reasons = localReport.reasons + "Correspondance avec une URL active signalée par la base URLhaus téléchargée."
-                    ) else localReport
-                    linkReport = report
-                    if (speakReplies && report.suspicious) {
-                        onSpeak("Attention. IKAR a relevé des indices suspects dans ce lien. Ne l'ouvre pas avant vérification. ${report.reasons.take(2).joinToString(". ")}")
-                    }
-                    scope.launch {
-                        withContext(Dispatchers.IO) {
-                            memoryDao.insert(MemoryEntry(type = "SECURITY_EVENT", content = "Vérification lien : " + (runCatching { java.net.URI(report.url).host }.getOrNull() ?: "hôte non reconnu") + " — " + if (report.suspicious) "signaux suspects : ${report.reasons.joinToString()}" else "aucun signal heuristique"))
-                        }
-                        refreshMemories()
-                    }
-                }, enabled = linkInput.isNotBlank(), modifier = Modifier.fillMaxWidth()) { Text("Vérifier le lien") }
-                linkReport?.let { report ->
-                    Text(if (report.suspicious) "Lien à risque — ne l'ouvre pas avant vérification" else "Aucun signal heuristique détecté", style = MaterialTheme.typography.titleSmall)
-                    report.reasons.forEach { Text("• $it", style = MaterialTheme.typography.bodySmall) }
-                    Text(if (ThreatIntelStore.indicatorCount(context) > 0) "Analyse locale + indicateurs URLhaus téléchargés : cette vérification reste limitée aux URLs/domaines connus et ne garantit pas qu'un lien inconnu est sûr." else "Analyse locale heuristique : aucune base de réputation téléchargée. Un lien inconnu n'est pas nécessairement sûr.", style = MaterialTheme.typography.bodySmall)
+                Text("Protection Web", style = MaterialTheme.typography.titleMedium)
+                Text("La navigation protégée, l’analyse des liens, la réputation des domaines, la résolution DNS et le filtre VPN disposent maintenant de leur propre écran.", style = MaterialTheme.typography.bodySmall)
+                Button(onClick = { selectedNavigation = "Protection Web" }, modifier = Modifier.fillMaxWidth()) {
+                    Text("Ouvrir Protection Web")
                 }
                 Divider()
                 Text("Mode urgence", style = MaterialTheme.typography.titleMedium)
