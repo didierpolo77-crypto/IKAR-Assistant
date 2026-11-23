@@ -27,7 +27,6 @@ jobs:
         run: sdkmanager "ndk;27.2.12479018"
       - name: Build official libyara for armeabi-v7a
         env:
-          ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/27.2.12479018
           YARA_TAG: v4.5.0
           ANDROID_API: "23"
         run: bash scripts/build-libyara-android-armv7.sh
