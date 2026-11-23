@@ -1,0 +1,52 @@
+name: Build libyara for Android ARMv7
+
+on:
+  pull_request:
+    branches: [ "main" ]
+    paths:
+      - "scripts/build-libyara-android-armv7.sh"
+      - ".github/workflows/yara-armv7-prototype.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-libyara-armv7:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install YARA build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y automake libtool make gcc pkg-config flex bison
+      - name: Set up Android SDK and NDK
+        uses: android-actions/setup-android@v3
+      - name: Install pinned Android NDK
+        run: sdkmanager "ndk;27.2.12479018"
+      - name: Build official libyara for armeabi-v7a
+        env:
+          ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/27.2.12479018
+          YARA_TAG: v4.5.0
+          ANDROID_API: "23"
+        run: bash scripts/build-libyara-android-armv7.sh
+      - name: Verify archive and ARMv7 object architecture
+        run: |
+          set -euo pipefail
+          ARCHIVE=artifacts/libyara/armeabi-v7a/libyara.a
+          test -s "$ARCHIVE"
+          mkdir -p /tmp/yara-verify
+          cd /tmp/yara-verify
+          "$ANDROID_HOME/ndk/27.2.12479018/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar" x "$GITHUB_WORKSPACE/$ARCHIVE"
+          OBJECT=$(find . -type f | head -n 1)
+          test -n "$OBJECT"
+          "$ANDROID_HOME/ndk/27.2.12479018/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf" -h "$OBJECT" | tee /tmp/yara-elf-header.txt
+          grep -q "ARM" /tmp/yara-elf-header.txt
+      - name: Upload ARMv7 libyara prototype
+        uses: actions/upload-artifact@v4
+        with:
+          name: ikar-libyara-android-armeabi-v7a-prototype
+          path: artifacts/libyara/
+          if-no-files-found: error
+          retention-days: 14
