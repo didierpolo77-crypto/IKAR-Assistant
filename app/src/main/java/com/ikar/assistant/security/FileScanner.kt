@@ -170,6 +170,7 @@ object FileScanner {
                 })
                 add("URLhaus SHA-256 (${if (ThreatIntelStore.hashCount(context) > 0) "base présente" else "base absente"})")
                 add("ClamAV : ${clamAvStatus.detail}")
+                add("Base YARA Forge : ${YaraForgeRulesStatus.status(context)}")
             }
             AntivirusScanHistory.record(context, name, hash, verdict, engines)
             val updateAssessment = if (isApk && packageName != null) {
