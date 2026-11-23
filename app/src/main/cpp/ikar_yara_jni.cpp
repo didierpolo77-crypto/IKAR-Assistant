@@ -45,10 +45,6 @@ extern "C" JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM*, void*) {
     return g_yara_init_result == ERROR_SUCCESS ? JNI_VERSION_1_6 : JNI_ERR;
 }
 
-extern "C" JNIEXPORT void JNICALL JNI_OnUnload(JavaVM*, void*) {
-    if (g_yara_init_result == ERROR_SUCCESS) yr_finalize();
-}
-
 extern "C" JNIEXPORT jstring JNICALL
 Java_com_ikar_assistant_security_NativeYaraEngine_nativeScanFile(
     JNIEnv* env, jobject, jstring file_path, jstring rule_path) {
