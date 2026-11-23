@@ -87,8 +87,10 @@ int compile_rule_directory(const std::string& directory, YR_RULES** output, size
     for (const auto& path : files) {
         FILE* input = std::fopen(path.c_str(), "rb");
         if (input == nullptr) { ++compile_errors; continue; }
-        // Keep a shared namespace so cross-rule dependencies in the curated package resolve.
-        compile_errors += yr_compiler_add_file(compiler, input, "ikar", path.c_str());
+        // Community rules share a namespace so cross-rule dependencies resolve.
+        // IKAR's bundled rules use a separate namespace to avoid identifier collisions.
+        const char* name_space = path.find("ikar-local-rules") != std::string::npos ? "ikar_local" : "ikar";
+        compile_errors += yr_compiler_add_file(compiler, input, name_space, path.c_str());
         std::fclose(input);
     }
     if (file_count != nullptr) *file_count = files.size();
