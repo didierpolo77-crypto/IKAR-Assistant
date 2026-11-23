@@ -287,6 +287,13 @@ private fun IkarHome(
             credentialStatus = "Jeton restauré depuis le stockage chiffré de cet appareil."
         }
     }
+
+    LaunchedEffect(Unit) {
+        while (true) {
+            yaraForgeStatus = YaraForgeRulesStatus.status(context)
+            kotlinx.coroutines.delay(3000)
+        }
+    }
     val recognizerState = remember { mutableStateOf<SpeechRecognizer?>(null) }
     var memoryError by remember { mutableStateOf<String?>(null) }
     var backendStatus by remember { mutableStateOf<String?>(null) }
@@ -331,6 +338,7 @@ private fun IkarHome(
     var securityEvents by remember { mutableStateOf<List<MemoryEntry>>(emptyList()) }
     var threatIntelAuthKey by remember { mutableStateOf("") }
     var threatIntelStatus by remember { mutableStateOf("Base de réputation non configurée.") }
+    var yaraForgeStatus by remember { mutableStateOf(YaraForgeRulesStatus.status(context)) }
     var threatIntelCount by remember { mutableIntStateOf(ThreatIntelStore.indicatorCount(context)) }
     var firewallRunning by remember { mutableStateOf(context.getSharedPreferences("ikar_security_center", android.content.Context.MODE_PRIVATE).getBoolean("dns_firewall_running", false)) }
     var observedMediaChanges by remember { mutableIntStateOf(SharedStorageBehaviorMonitor.recentChangeCount(context)) }
@@ -789,6 +797,12 @@ private fun IkarHome(
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Antivirus local — fichiers et APK", style = MaterialTheme.typography.titleLarge)
                 Text("Sélectionne toi-même un fichier ou un APK. IKAR calcule son empreinte SHA-256 et inspecte localement le manifeste des APK, sans envoyer le fichier sur Internet.")
+                Text("Moteur : libyara 4.5.0 natif ARMv7 prioritaire ; moteur Kotlin limité uniquement en secours si le natif est indisponible.", style = MaterialTheme.typography.bodySmall)
+                Text("Base YARA Forge : $yaraForgeStatus", style = MaterialTheme.typography.bodySmall)
+                Button(
+                    onClick = { YaraForgeRulesScheduler.updateNow(context) },
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text("Actualiser la base YARA Forge") }
                 Button(
                     onClick = { filePicker.launch(arrayOf("*/*")) },
                     enabled = !fileScanRunning,
@@ -814,7 +828,7 @@ private fun IkarHome(
                     } else {
                         report.indicators.forEach { Text("• $it", style = MaterialTheme.typography.bodySmall) }
                     }
-                    Text("Le contrôle YARA local utilise actuellement un évaluateur compatible avec un sous-ensemble de règles ASCII ; ce n'est pas encore la bibliothèque officielle libyara. ClamAV natif n'est pas encore embarqué : IKAR ne prétend pas l'avoir exécuté.", style = MaterialTheme.typography.bodySmall)
+                    Text("Le moteur natif officiel libyara 4.5.0 est utilisé en priorité. Les règles YARA Forge sont conservées localement après téléchargement et restent utilisables hors connexion. Le moteur Kotlin n'est qu'un secours limité. ClamAV natif n'est pas encore embarqué.", style = MaterialTheme.typography.bodySmall)
                     if (report.indicators.isNotEmpty() && lastScannedUri != null) {
                         Button(onClick = {
                             val source = lastScannedUri
