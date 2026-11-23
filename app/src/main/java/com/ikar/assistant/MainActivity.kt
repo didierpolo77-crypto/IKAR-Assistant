@@ -834,15 +834,15 @@ private fun IkarHome(
                                 Text("Identification MalwareBazaar", style = MaterialTheme.typography.titleSmall)
                                 if (intel.exactHashMatch) {
                                     Text("Correspondance exacte SHA-256", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.titleMedium)
-                                    Text("Famille : \${intel.family ?: "non renseignée"}")
+                                    Text("Famille : ${intel.family ?: "non renseignée"}")
                                     intel.sampleName?.let { Text("Nom du fichier référencé : $it", style = MaterialTheme.typography.bodySmall) }
-                                    if (intel.tags.isNotEmpty()) Text("Tags : \${intel.tags.joinToString(", ")}", style = MaterialTheme.typography.bodySmall)
+                                    if (intel.tags.isNotEmpty()) Text("Tags : ${intel.tags.joinToString(", ")}", style = MaterialTheme.typography.bodySmall)
                                 } else {
                                     Text("Aucune correspondance exacte SHA-256 connue.", style = MaterialTheme.typography.bodyMedium)
                                     if (intel.relatedRuleFamilies.isNotEmpty()) {
                                         Text("Familles associées aux règles YARA", style = MaterialTheme.typography.titleSmall)
                                         intel.relatedRuleFamilies.forEach { (rule, families) ->
-                                            Text("$rule : \${families.joinToString(", ")}", style = MaterialTheme.typography.bodySmall)
+                                            Text("$rule : ${families.joinToString(", ")}", style = MaterialTheme.typography.bodySmall)
                                         }
                                         Text("Ces familles proviennent d'autres échantillons liés aux règles ; elles ne constituent pas une identification exacte de ce fichier.", style = MaterialTheme.typography.bodySmall)
                                     }
@@ -1237,7 +1237,7 @@ private fun IkarHome(
                         malwareBazaarApiKey = ""
                         malwareBazaarStatus = "Clé MalwareBazaar enregistrée et chiffrée dans Android Keystore. Elle sera utilisée lors des prochaines analyses."
                     } catch (error: Exception) {
-                        malwareBazaarStatus = "Impossible d'enregistrer la clé : \${error.localizedMessage ?: "vérifie la clé"}"
+                        malwareBazaarStatus = "Impossible d'enregistrer la clé : ${error.localizedMessage ?: "vérifie la clé"}"
                     }
                 }, enabled = malwareBazaarApiKey.length >= 16, modifier = Modifier.fillMaxWidth()) {
                     Text("Enregistrer la clé MalwareBazaar")
