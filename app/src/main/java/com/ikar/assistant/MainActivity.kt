@@ -89,6 +89,8 @@ import com.ikar.assistant.security.PendingActionCenter
 import com.ikar.assistant.security.ActionAudit
 import com.ikar.assistant.security.FolderRiskReport
 import com.ikar.assistant.security.ThreatIntelStore
+import com.ikar.assistant.security.YaraForgeRulesScheduler
+import com.ikar.assistant.security.YaraForgeRulesStatus
 import com.ikar.assistant.security.ThreatIntelScheduler
 import com.ikar.assistant.security.IkarDnsFirewallService
 import com.ikar.assistant.security.SharedStorageBehaviorMonitor
