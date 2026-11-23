@@ -49,6 +49,12 @@ mkdir -p "${ROOT}/artifacts/libyara/armeabi-v7a"
 cp "${LIB}" "${ROOT}/artifacts/libyara/armeabi-v7a/libyara.a"
 cp -R "${PREFIX}/include/yara" "${ROOT}/artifacts/libyara/"
 
+# Stage the validated ARMv7 archive and public headers for the Android CMake build.
+NATIVE_YARA="${ROOT}/app/src/main/cpp/third_party/yara"
+mkdir -p "${NATIVE_YARA}/armeabi-v7a" "${NATIVE_YARA}/include"
+cp "${LIB}" "${NATIVE_YARA}/armeabi-v7a/libyara.a"
+cp -R "${PREFIX}/include/yara" "${NATIVE_YARA}/include/"
+
 echo "YARA tag: ${YARA_TAG}"
 echo "Android API: ${API}"
 echo "ABI: armeabi-v7a"
