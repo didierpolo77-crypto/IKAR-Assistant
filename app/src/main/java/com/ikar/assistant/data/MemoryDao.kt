@@ -7,6 +7,7 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Transaction
 import com.ikar.assistant.security.PendingActionEntity
+import com.ikar.assistant.security.MalwareBazaarIntelEntity
 
 @Dao
 interface MemoryDao {
@@ -41,4 +42,16 @@ interface MemoryDao {
 
     @Query("UPDATE pending_actions SET status = 'EXPIRED' WHERE status = 'PENDING' AND expiresAt <= :now")
     suspend fun expirePendingActions(now: Long = System.currentTimeMillis()): Int
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertMalwareBazaarIntel(entries: List<MalwareBazaarIntelEntity>)
+
+    @Query("SELECT * FROM malwarebazaar_intel WHERE sha256 = :sha256 LIMIT 1")
+    suspend fun findMalwareBazaarIntel(sha256: String): MalwareBazaarIntelEntity?
+
+    @Query("SELECT COUNT(*) FROM malwarebazaar_intel")
+    suspend fun countMalwareBazaarIntel(): Int
+
+    @Query("SELECT * FROM malwarebazaar_intel ORDER BY updatedAt ASC LIMIT :limit")
+    suspend fun oldestMalwareBazaarIntel(limit: Int): List<MalwareBazaarIntelEntity>
 }
