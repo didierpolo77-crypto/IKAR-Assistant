@@ -24,6 +24,11 @@ object RansomwareRecoveryVault {
     private const val TAG_BITS = 128
     private const val IV_BYTES = 12
     private const val MAX_BACKUP_BYTES = 100L * 1024L * 1024L
+    private const val MAX_VAULT_BYTES = 512L * 1024L * 1024L
+
+    private fun storedBytes(context: Context): Long =
+        vaultDir(context).listFiles()?.filter { it.isFile && it.extension == "ikv" }
+            ?.sumOf { it.length() } ?: 0L
 
     data class Backup(
         val id: String,
@@ -62,6 +67,13 @@ object RansomwareRecoveryVault {
         val id = java.util.UUID.randomUUID().toString()
         val destination = File(vaultDir(context), "$id.ikv")
         val temporary = File(vaultDir(context), "$id.tmp")
+        val existingBytes = storedBytes(context)
+        if (existingBytes >= MAX_VAULT_BYTES) {
+            throw IllegalStateException("Coffre plein (512 Mo). Supprime des anciennes sauvegardes avant d'en ajouter.")
+        }
+        if (vaultDir(context).usableSpace < 16L * 1024L * 1024L) {
+            throw IllegalStateException("Espace libre insuffisant pour créer une sauvegarde protégée.")
+        }
         var total = 0L
         try {
             val cipher = Cipher.getInstance(TRANSFORMATION)
@@ -78,7 +90,13 @@ object RansomwareRecoveryVault {
                             val count = input.read(buffer)
                             if (count < 0) break
                             total += count
-                            require(total <= MAX_BACKUP_BYTES) { "Limite de sauvegarde : 100 Mo." }
+                            require(total <= MAX_BACKUP_BYTES) { "Limite de sauvegarde par fichier : 100 Mo." }
+                            require(existingBytes + total <= MAX_VAULT_BYTES) {
+                                "Coffre plein (512 Mo). Supprime des anciennes sauvegardes avant d'en ajouter."
+                            }
+                            require(vaultDir(context).usableSpace >= 8L * 1024L * 1024L) {
+                                "Espace libre insuffisant : sauvegarde interrompue pour protéger le stockage."
+                            }
                             encrypted.write(buffer, 0, count)
                         }
                     }
