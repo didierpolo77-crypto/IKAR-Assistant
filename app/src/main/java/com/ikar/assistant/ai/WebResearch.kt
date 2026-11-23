@@ -21,6 +21,7 @@ object WebResearch {
     private const val CONNECT_TIMEOUT_MS = 9_000
     private const val READ_TIMEOUT_MS = 12_000
     private const val MAX_OUTPUT_CHARS = 8_000
+    private const val MAX_RESPONSE_BYTES = 1_048_576
 
     internal fun cleanQuery(question: String): String {
         val cleaned = question
@@ -213,11 +214,26 @@ object WebResearch {
         }
         try {
             val status = connection.responseCode
-            val stream = if (status in 200..299) connection.inputStream else connection.errorStream
-            val body = stream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
             if (status !in 200..299) {
+                connection.errorStream?.close()
                 throw IllegalStateException("HTTP $status")
             }
+            val stream = connection.inputStream
+            val body = stream?.use { input ->
+                val output = java.io.ByteArrayOutputStream()
+                val buffer = ByteArray(16 * 1024)
+                var total = 0
+                while (true) {
+                    val count = input.read(buffer)
+                    if (count < 0) break
+                    total += count
+                    if (total > MAX_RESPONSE_BYTES) {
+                        throw IllegalStateException("Réponse de recherche trop volumineuse (limite 1 Mo).")
+                    }
+                    output.write(buffer, 0, count)
+                }
+                output.toString(Charsets.UTF_8.name())
+            }.orEmpty()
             if (body.isBlank()) throw IllegalStateException("Réponse vide")
             return body
         } finally {
