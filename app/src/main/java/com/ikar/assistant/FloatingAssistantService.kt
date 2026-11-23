@@ -26,6 +26,7 @@ import android.view.View
 import android.view.WindowManager
 import android.widget.Button
 import android.widget.EditText
+import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
@@ -102,28 +103,31 @@ class FloatingAssistantService : Service() {
 
     private fun showBubble() {
         val view = TextView(this).apply {
-            text = "IKAR"
-            textSize = 14f
+            text = "✦"
+            textSize = 25f
             setTextColor(Color.WHITE)
             gravity = Gravity.CENTER
-            background = GradientDrawable().apply {
+            contentDescription = "Ouvrir IKAR Assistant"
+            background = GradientDrawable(
+                GradientDrawable.Orientation.TL_BR,
+                intArrayOf(Color.rgb(38, 190, 117), Color.rgb(16, 103, 77))
+            ).apply {
                 shape = GradientDrawable.OVAL
-                setColor(Color.rgb(28, 91, 170))
-                setStroke(dp(2), Color.WHITE)
+                setStroke(dp(2), Color.rgb(190, 255, 218))
             }
-            elevation = dp(8).toFloat()
+            elevation = dp(12).toFloat()
             setOnClickListener { showPanel() }
         }
         params = WindowManager.LayoutParams(
-            dp(62), dp(62),
+            dp(58), dp(58),
             if (Build.VERSION.SDK_INT >= 26) WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
             else @Suppress("DEPRECATION") WindowManager.LayoutParams.TYPE_PHONE,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.END
-            x = dp(12)
-            y = dp(220)
+            x = dp(14)
+            y = dp(190)
         }
         view.setOnTouchListener(object : View.OnTouchListener {
             private var downX = 0f
@@ -164,52 +168,151 @@ class FloatingAssistantService : Service() {
         bubble?.let { runCatching { windowManager.removeView(it) } }
         bubble = null
 
+        val screenWidth = resources.displayMetrics.widthPixels
+        val screenHeight = resources.displayMetrics.heightPixels
+        val panelWidth = minOf(dp(430), (screenWidth * 0.94f).toInt())
+        val panelHeight = minOf(dp(620), (screenHeight * 0.78f).toInt())
+
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(12), dp(12), dp(12), dp(12))
+            setPadding(dp(14), dp(12), dp(14), dp(12))
             background = GradientDrawable().apply {
-                setColor(Color.rgb(17, 29, 49))
-                cornerRadius = dp(18).toFloat()
-                setStroke(dp(1), Color.rgb(67, 111, 171))
+                setColor(Color.rgb(9, 19, 17))
+                cornerRadius = dp(26).toFloat()
+                setStroke(dp(1), Color.rgb(47, 112, 83))
             }
-            elevation = dp(12).toFloat()
+            elevation = dp(18).toFloat()
         }
-        val header = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-        val title = TextView(this).apply { text = "IKAR • Discussion"; textSize = 16f; setTextColor(Color.WHITE) }
-        val close = Button(this).apply { text = "—"; setOnClickListener { hidePanel(); showBubble() } }
-        header.addView(title, LinearLayout.LayoutParams(0, dp(44), 1f))
-        header.addView(close, LinearLayout.LayoutParams(dp(48), dp(44)))
+
+        val header = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, 0, 0, dp(10))
+        }
+        val avatar = TextView(this).apply {
+            text = "✦"
+            textSize = 21f
+            gravity = Gravity.CENTER
+            setTextColor(Color.WHITE)
+            background = GradientDrawable(
+                GradientDrawable.Orientation.TL_BR,
+                intArrayOf(Color.rgb(41, 180, 112), Color.rgb(18, 92, 70))
+            ).apply { cornerRadius = dp(17).toFloat() }
+        }
+        header.addView(avatar, LinearLayout.LayoutParams(dp(46), dp(46)))
+        val identity = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(10), 0, 0, 0)
+        }
+        identity.addView(TextView(this).apply {
+            text = "IKAR"
+            textSize = 17f
+            setTextColor(Color.WHITE)
+            setTypeface(typeface, android.graphics.Typeface.BOLD)
+        })
+        identity.addView(TextView(this).apply {
+            text = "Assistant personnel · prêt à aider"
+            textSize = 11f
+            setTextColor(Color.rgb(153, 190, 171))
+        })
+        header.addView(identity, LinearLayout.LayoutParams(0, -2, 1f))
+        val minimize = TextView(this).apply {
+            text = "—"
+            textSize = 21f
+            gravity = Gravity.CENTER
+            setTextColor(Color.rgb(218, 239, 226))
+            background = roundedPanel(Color.rgb(25, 43, 37), dp(13))
+            setOnClickListener { hidePanel(); showBubble() }
+        }
+        header.addView(minimize, LinearLayout.LayoutParams(dp(42), dp(42)).apply {
+            marginEnd = dp(7)
+        })
+        val close = TextView(this).apply {
+            text = "×"
+            textSize = 25f
+            gravity = Gravity.CENTER
+            setTextColor(Color.WHITE)
+            background = roundedPanel(Color.rgb(75, 39, 43), dp(13))
+            setOnClickListener { hidePanel(); stopSelf() }
+        }
+        header.addView(close, LinearLayout.LayoutParams(dp(42), dp(42)))
         root.addView(header)
 
-        val transcript = TextView(this).apply {
-            text = "Bonjour ! Je suis disponible ici, même lorsque tu utilises une autre application.\n"
-            textSize = 14f
-            setTextColor(Color.WHITE)
-            setPadding(dp(8), dp(8), dp(8), dp(8))
+        val divider = View(this).apply { setBackgroundColor(Color.rgb(37, 62, 52)) }
+        root.addView(divider, LinearLayout.LayoutParams(-1, dp(1)))
+
+        val transcript = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(2), dp(12), dp(2), dp(12))
         }
-        val scroll = ScrollView(this).apply { addView(transcript) }
+        val scroll = ScrollView(this).apply {
+            isFillViewport = true
+            clipToPadding = false
+            addView(transcript, android.view.ViewGroup.LayoutParams(-1, -2))
+        }
         root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
+        appendChatBubble(
+            transcript,
+            "Bonjour ! Je suis IKAR. Je peux t'aider à protéger ton téléphone, organiser tes tâches et répondre à tes questions.",
+            fromIkar = true
+        )
 
-        val input = EditText(this).apply {
-            hint = "Écris à IKAR…"
-            setHintTextColor(Color.LTGRAY)
-            setTextColor(Color.WHITE)
-            setSingleLine(false)
-            maxLines = 3
+        val composer = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, dp(10), 0, 0)
         }
-        root.addView(input, LinearLayout.LayoutParams(-1, dp(54)))
-        val voice = Button(this).apply { text = "🎙 Parler à IKAR" }
-        root.addView(voice, LinearLayout.LayoutParams(-1, dp(48)))
-        voice.setOnClickListener { startVoiceRecognition(input, transcript, scroll) }
+        val input = EditText(this).apply {
+            hint = "Écris ton message…"
+            setHintTextColor(Color.rgb(137, 164, 150))
+            setTextColor(Color.WHITE)
+            textSize = 14f
+            setPadding(dp(14), dp(8), dp(12), dp(8))
+            setSingleLine(false)
+            minLines = 1
+            maxLines = 4
+            background = roundedPanel(Color.rgb(23, 39, 33), dp(18)).apply {
+                setStroke(dp(1), Color.rgb(53, 87, 70))
+            }
+            imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_SEND
+        }
+        composer.addView(input, LinearLayout.LayoutParams(0, dp(52), 1f))
+        val voice = TextView(this).apply {
+            text = "🎙"
+            textSize = 19f
+            gravity = Gravity.CENTER
+            setTextColor(Color.WHITE)
+            background = roundedPanel(Color.rgb(32, 69, 53), dp(16))
+            contentDescription = "Parler à IKAR"
+        }
+        composer.addView(voice, LinearLayout.LayoutParams(dp(48), dp(48)).apply {
+            marginStart = dp(7)
+        })
+        val send = TextView(this).apply {
+            text = "➤"
+            textSize = 20f
+            gravity = Gravity.CENTER
+            setTextColor(Color.rgb(6, 31, 19))
+            background = GradientDrawable(
+                GradientDrawable.Orientation.TL_BR,
+                intArrayOf(Color.rgb(164, 244, 119), Color.rgb(58, 195, 119))
+            ).apply { cornerRadius = dp(16).toFloat() }
+            contentDescription = "Envoyer le message"
+        }
+        composer.addView(send, LinearLayout.LayoutParams(dp(48), dp(48)).apply {
+            marginStart = dp(7)
+        })
+        root.addView(composer)
 
-        val send = Button(this).apply { text = "Envoyer" }
-        root.addView(send, LinearLayout.LayoutParams(-1, dp(48)))
-        send.setOnClickListener {
+        voice.setOnClickListener { startVoiceRecognition(input, transcript, scroll) }
+        val sendMessage: () -> Unit = {
             val question = input.text.toString().trim()
             if (question.isNotEmpty()) {
                 input.setText("")
-                transcript.append("\nToi : $question\nIKAR : recherche…\n")
+                appendChatBubble(transcript, question, fromIkar = false)
+                val waiting = appendChatBubble(transcript, "Je réfléchis…", fromIkar = true, subdued = true)
                 scroll.post { scroll.fullScroll(View.FOCUS_DOWN) }
+                send.isEnabled = false
                 serviceScope.launch {
                     val reply = withContext(Dispatchers.IO) {
                         val dao = MemoryDatabase.getInstance(applicationContext).memoryDao()
@@ -218,15 +321,24 @@ class FloatingAssistantService : Service() {
                         dao.insert(MemoryEntry(type = "ASSISTANT_MESSAGE", content = answer))
                         answer
                     }
-                    transcript.append("$reply\n")
-                    if (speechOutputReady) speechOutput?.speak(reply.take(2500), TextToSpeech.QUEUE_FLUSH, null, "ikar-floating-reply")
+                    transcript.removeView(waiting)
+                    appendChatBubble(transcript, reply, fromIkar = true)
+                    send.isEnabled = true
                     scroll.post { scroll.fullScroll(View.FOCUS_DOWN) }
+                    if (speechOutputReady) speechOutput?.speak(reply.take(2500), TextToSpeech.QUEUE_FLUSH, null, "ikar-floating-reply")
                 }
             }
         }
+        send.setOnClickListener { sendMessage() }
+        input.setOnEditorActionListener { _, actionId, _ ->
+            if (actionId == android.view.inputmethod.EditorInfo.IME_ACTION_SEND) {
+                sendMessage()
+                true
+            } else false
+        }
 
         val p = WindowManager.LayoutParams(
-            dp(320), dp(440),
+            panelWidth, panelHeight,
             if (Build.VERSION.SDK_INT >= 26) WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
             else @Suppress("DEPRECATION") WindowManager.LayoutParams.TYPE_PHONE,
             WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
@@ -240,15 +352,50 @@ class FloatingAssistantService : Service() {
         windowManager.addView(root, p)
     }
 
+    private fun appendChatBubble(
+        container: LinearLayout,
+        message: String,
+        fromIkar: Boolean,
+        subdued: Boolean = false
+    ): View {
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = if (fromIkar) Gravity.START else Gravity.END
+            setPadding(0, dp(3), 0, dp(3))
+        }
+        val bubble = TextView(this).apply {
+            text = message
+            textSize = 14f
+            setTextColor(if (subdued) Color.rgb(153, 181, 165) else Color.rgb(239, 247, 241))
+            setPadding(dp(13), dp(10), dp(13), dp(10))
+            background = roundedPanel(
+                if (fromIkar) Color.rgb(25, 45, 36) else Color.rgb(32, 105, 75),
+                dp(18)
+            )
+            maxWidth = (resources.displayMetrics.widthPixels * 0.72f).toInt()
+            setTextIsSelectable(true)
+        }
+        row.addView(bubble, LinearLayout.LayoutParams(-2, -2).apply {
+            if (fromIkar) marginEnd = dp(34) else marginStart = dp(34)
+        })
+        container.addView(row, LinearLayout.LayoutParams(-1, -2))
+        return row
+    }
 
-    private fun startVoiceRecognition(input: EditText, transcript: TextView, scroll: ScrollView) {
+    private fun roundedPanel(color: Int, radius: Int): GradientDrawable =
+        GradientDrawable().apply {
+            setColor(color)
+            cornerRadius = radius.toFloat()
+        }
+
+    private fun startVoiceRecognition(input: EditText, transcript: LinearLayout, scroll: ScrollView) {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            transcript.append("\nIKAR : autorise d'abord le microphone depuis l'application principale.\n")
+            appendChatBubble(transcript, "Autorise d'abord le microphone depuis l'application principale.", fromIkar = true)
             scroll.post { scroll.fullScroll(View.FOCUS_DOWN) }
             return
         }
         if (!SpeechRecognizer.isRecognitionAvailable(this)) {
-            transcript.append("\nIKAR : aucun service de reconnaissance vocale n'est disponible.\n")
+            appendChatBubble(transcript, "Aucun service de reconnaissance vocale n'est disponible.", fromIkar = true)
             return
         }
         try {
@@ -261,7 +408,7 @@ class FloatingAssistantService : Service() {
             speechRecognizer = recognizer
             recognizer.setRecognitionListener(object : RecognitionListener {
                 override fun onReadyForSpeech(params: Bundle?) {
-                    transcript.append("\nIKAR : je t'écoute…\n")
+                    appendChatBubble(transcript, "Je t'écoute…", fromIkar = true, subdued = true)
                     scroll.post { scroll.fullScroll(View.FOCUS_DOWN) }
                 }
                 override fun onBeginningOfSpeech() {}
@@ -269,7 +416,7 @@ class FloatingAssistantService : Service() {
                 override fun onBufferReceived(buffer: ByteArray?) {}
                 override fun onEndOfSpeech() {}
                 override fun onError(error: Int) {
-                    transcript.append("IKAR : reconnaissance vocale impossible (code $error).\n")
+                    appendChatBubble(transcript, "Reconnaissance vocale impossible (code $error).", fromIkar = true)
                     speechRecognizer?.destroy()
                     speechRecognizer = null
                     scroll.post { scroll.fullScroll(View.FOCUS_DOWN) }
@@ -279,9 +426,9 @@ class FloatingAssistantService : Service() {
                     if (spoken.isNotBlank()) {
                         input.setText(spoken)
                         input.setSelection(input.text.length)
-                        transcript.append("IKAR : j'ai compris : $spoken\nAppuie sur Envoyer pour confirmer.\n")
+                        appendChatBubble(transcript, "J'ai compris : $spoken. Appuie sur envoyer pour confirmer.", fromIkar = true)
                     } else {
-                        transcript.append("IKAR : je n'ai pas compris. Réessaie.\n")
+                        appendChatBubble(transcript, "Je n'ai pas compris. Réessaie.", fromIkar = true)
                     }
                     speechRecognizer?.destroy()
                     speechRecognizer = null
@@ -298,7 +445,7 @@ class FloatingAssistantService : Service() {
             }
             recognizer.startListening(intent)
         } catch (error: Exception) {
-            transcript.append("IKAR : impossible de démarrer le microphone.\n")
+            appendChatBubble(transcript, "Impossible de démarrer le microphone.", fromIkar = true)
         }
     }
 
