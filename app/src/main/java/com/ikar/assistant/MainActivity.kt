@@ -90,6 +90,7 @@ import com.ikar.assistant.security.ActionAudit
 import com.ikar.assistant.security.FolderRiskReport
 import com.ikar.assistant.security.ThreatIntelStore
 import com.ikar.assistant.security.MalwareBazaarStore
+import com.ikar.assistant.security.MalwareBazaarSyncScheduler
 import com.ikar.assistant.security.YaraForgeRulesScheduler
 import com.ikar.assistant.security.YaraForgeRulesStatus
 import com.ikar.assistant.security.ThreatIntelScheduler
