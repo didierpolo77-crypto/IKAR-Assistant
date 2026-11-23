@@ -28,6 +28,8 @@ object ThreatIntelStore {
     private const val UPDATED_AT = "updated_at"
     private const val COUNT = "indicator_count"
 
+    @Volatile private var dbHelper: IndicatorDb? = null
+
     private class IndicatorDb(context: Context) :
         SQLiteOpenHelper(context.applicationContext, "ikar_urlhaus_indicators.db", null, 1) {
         override fun onCreate(db: SQLiteDatabase) {
@@ -47,8 +49,10 @@ object ThreatIntelStore {
     }
 
     private fun database(context: Context): SQLiteDatabase {
-        val helper = IndicatorDb(context)
-        val db = helper.writableDatabase
+        val current = dbHelper ?: synchronized(this) {
+            dbHelper ?: IndicatorDb(context).also { dbHelper = it }
+        }
+        val db = current.writableDatabase
         migrateLegacyPreferences(context, db)
         return db
     }
