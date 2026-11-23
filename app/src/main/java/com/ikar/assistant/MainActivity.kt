@@ -838,7 +838,15 @@ private fun IkarHome(
                                     intel.sampleName?.let { Text("Nom du fichier référencé : $it", style = MaterialTheme.typography.bodySmall) }
                                     if (intel.tags.isNotEmpty()) Text("Tags : ${intel.tags.joinToString(", ")}", style = MaterialTheme.typography.bodySmall)
                                 } else {
-                                    Text("Aucune correspondance exacte SHA-256 connue.", style = MaterialTheme.typography.bodyMedium)
+                                    val hasLookupResult = intel.status.startsWith("Aucune correspondance") ||
+                                        intel.status.startsWith("Familles observées") ||
+                                        intel.status.startsWith("Mode hors connexion") ||
+                                        intel.status.contains("données locales en cache")
+                                    Text(
+                                        if (hasLookupResult) "Aucune correspondance exacte SHA-256 connue."
+                                        else "Identification non vérifiée : clé absente ou service indisponible.",
+                                        style = MaterialTheme.typography.bodyMedium
+                                    )
                                     if (intel.relatedRuleFamilies.isNotEmpty()) {
                                         Text("Familles associées aux règles YARA", style = MaterialTheme.typography.titleSmall)
                                         intel.relatedRuleFamilies.forEach { (rule, families) ->
