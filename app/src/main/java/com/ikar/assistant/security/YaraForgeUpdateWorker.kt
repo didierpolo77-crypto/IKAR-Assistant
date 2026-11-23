@@ -63,9 +63,9 @@ class YaraForgeUpdateWorker(
     companion object {
         private const val PREFS = "ikar_yara_forge"
         private const val RELEASE_API = "https://api.github.com/repos/YARAHQ/yara-forge/releases/latest"
-        private const val ASSET_NAME = "yara-forge-rules-core.zip"
-        private const val MAX_ARCHIVE_BYTES = 20 * 1024 * 1024
-        private const val MAX_EXPANDED_BYTES = 40L * 1024L * 1024L
+        private const val ASSET_NAME = "yara-forge-rules-full.zip"
+        private const val MAX_ARCHIVE_BYTES = 10 * 1024 * 1024
+        private const val MAX_EXPANDED_BYTES = 128L * 1024L * 1024L
         private const val MAX_ENTRIES = 15000
     }
 
