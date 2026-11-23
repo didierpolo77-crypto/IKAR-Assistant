@@ -22,7 +22,9 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y automake libtool make gcc pkg-config flex bison
       - name: Set up Android SDK and NDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
+        with:
+          packages: 'platform-tools'
       - name: Install pinned Android NDK
         run: sdkmanager "ndk;27.2.12479018"
       - name: Build official libyara for armeabi-v7a
