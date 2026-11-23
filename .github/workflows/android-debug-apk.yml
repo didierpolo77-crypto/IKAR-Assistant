@@ -23,12 +23,13 @@ jobs:
       - name: Install native YARA build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y automake libtool make gcc pkg-config flex bison
+          sudo apt-get install -y automake libtool make gcc pkg-config flex bison libssl-dev
           sdkmanager --install "ndk;27.2.12479018" "cmake;3.22.1"
       - name: Build official libyara for Android ARMv7
         env:
           YARA_TAG: v4.5.0
           ANDROID_API: "23"
+          OPENSSL_TAG: openssl-3.5.9
         run: bash scripts/build-libyara-android-armv7.sh
       - name: Validate YARA Forge Core rules with YARA 4.5.0
         run: |
