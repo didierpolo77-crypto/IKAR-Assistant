@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fetch, verify and compile the latest YARA Forge Core package with YARA 4.5.0."""
+"""Fetch, verify and compile the latest YARA Forge Full package with YARA 4.5.0."""
 import hashlib
 import json
 import os
@@ -28,21 +28,21 @@ if not tag.isdigit() or len(tag) != 8:
     raise SystemExit(f"Invalid YARA Forge release tag: {tag!r}")
 asset = next(
     (item for item in release.get("assets", [])
-     if item.get("name") == "yara-forge-rules-core.zip"),
+     if item.get("name") == "yara-forge-rules-full.zip"),
     None,
 )
 if not asset:
-    raise SystemExit("YARA Forge Core ZIP asset is missing")
+    raise SystemExit("YARA Forge Full ZIP asset is missing")
 expected_digest = (asset.get("digest") or "").removeprefix("sha256:").lower()
 if len(expected_digest) != 64:
     raise SystemExit("YARA Forge asset has no SHA-256 digest")
-if asset.get("size", 0) <= 0 or asset["size"] > 20 * 1024 * 1024:
+if asset.get("size", 0) <= 0 or asset["size"] > 10 * 1024 * 1024:
     raise SystemExit("YARA Forge archive size is outside the allowed limit")
 
 download = urllib.request.Request(asset["browser_download_url"], headers=headers)
 with urllib.request.urlopen(download, timeout=60) as response:
-    archive = response.read(20 * 1024 * 1024 + 1)
-if len(archive) != asset["size"] or len(archive) > 20 * 1024 * 1024:
+    archive = response.read(10 * 1024 * 1024 + 1)
+if len(archive) != asset["size"] or len(archive) > 10 * 1024 * 1024:
     raise SystemExit("YARA Forge archive size mismatch")
 actual_digest = hashlib.sha256(archive).hexdigest()
 if actual_digest != expected_digest:
@@ -75,8 +75,8 @@ with tempfile.TemporaryDirectory(prefix="ikar-yara-forge-") as temporary:
             if entry.file_size > 32 * 1024 * 1024:
                 raise SystemExit(f"YARA Forge entry exceeds 32 MiB: {name}")
             expanded += entry.file_size
-            if expanded > 40 * 1024 * 1024:
-                raise SystemExit("YARA Forge expanded archive exceeds 40 MiB")
+            if expanded > 128 * 1024 * 1024:
+                raise SystemExit("YARA Forge expanded archive exceeds 128 MiB")
             target = rules_root.joinpath(*path.parts)
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes(package.read(entry))
@@ -84,8 +84,8 @@ with tempfile.TemporaryDirectory(prefix="ikar-yara-forge-") as temporary:
                 rule_files.append(target)
 
     if not rule_files:
-        raise SystemExit("YARA Forge Core package contains no .yar/.yara rules")
-    compiled = root / "yara-forge-core.yarc"
+        raise SystemExit("YARA Forge Full package contains no .yar/.yara rules")
+    compiled = root / "yara-forge-full.yarc"
     command = [str(yarac)] + [str(path) for path in sorted(rule_files)] + [str(compiled)]
     subprocess.run(command, check=True)
     if not compiled.is_file() or compiled.stat().st_size == 0:
