@@ -7,10 +7,11 @@ import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.ikar.assistant.security.PendingActionEntity
+import com.ikar.assistant.security.MalwareBazaarIntelEntity
 
 @Database(
-    entities = [MemoryEntry::class, PendingActionEntity::class],
-    version = 2,
+    entities = [MemoryEntry::class, PendingActionEntity::class, MalwareBazaarIntelEntity::class],
+    version = 3,
     exportSchema = false
 )
 abstract class MemoryDatabase : RoomDatabase() {
@@ -42,6 +43,24 @@ abstract class MemoryDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """CREATE TABLE IF NOT EXISTS malwarebazaar_intel (
+                        sha256 TEXT NOT NULL PRIMARY KEY,
+                        signature TEXT,
+                        fileName TEXT,
+                        fileType TEXT,
+                        mimeType TEXT,
+                        firstSeen TEXT,
+                        tagsJson TEXT NOT NULL,
+                        updatedAt INTEGER NOT NULL
+                    )"""
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_malwarebazaar_intel_updatedAt ON malwarebazaar_intel(updatedAt)")
+            }
+        }
+
         fun getInstance(context: Context): MemoryDatabase {
             return INSTANCE ?: synchronized(this) {
                 INSTANCE ?: run {
@@ -51,7 +70,7 @@ abstract class MemoryDatabase : RoomDatabase() {
                         MemoryDatabase::class.java,
                         "ikar_local_memory.db"
                     )
-                        .addMigrations(MIGRATION_1_2)
+                        .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                         .addCallback(object : RoomDatabase.Callback() {
                             override fun onOpen(db: SupportSQLiteDatabase) {
                                 super.onOpen(db)
