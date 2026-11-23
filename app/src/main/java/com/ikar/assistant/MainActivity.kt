@@ -303,6 +303,14 @@ private fun IkarHome(
     var savedFolderUri by remember { mutableStateOf(context.getSharedPreferences("ikar_security_center", android.content.Context.MODE_PRIVATE).getString("monitored_folder_uri", null)) }
     var linkInput by remember { mutableStateOf("") }
     var linkReport by remember { mutableStateOf<LinkRiskReport?>(null) }
+    var webIndicatorInput by remember { mutableStateOf("") }
+    var dnsLookupInput by remember { mutableStateOf("") }
+    var dnsRecordType by remember { mutableStateOf("A") }
+    var webDomainResult by remember { mutableStateOf<String?>(null) }
+    var dnsLookupResult by remember { mutableStateOf<String?>(null) }
+    var webDomainChecking by remember { mutableStateOf(false) }
+    var dnsLookupRunning by remember { mutableStateOf(false) }
+    var webLocalAssessment by remember { mutableStateOf<LinkRiskReport?>(null) }
     var emergencyMode by remember { mutableStateOf(SecurityCenter.isEmergency(context)) }
     var securityEvents by remember { mutableStateOf<List<MemoryEntry>>(emptyList()) }
     var threatIntelAuthKey by remember { mutableStateOf("") }
@@ -860,10 +868,167 @@ private fun IkarHome(
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text("Protection Web IKAR", style = MaterialTheme.typography.titleLarge)
-                    Text("Navigation protégée Android Safe Browsing, vérification heuristique de liens, réputation URLhaus et filtre DNS local VPN. Ces protections ont des limites : le filtre DNS ne couvre pas tous les flux ni les DNS chiffrés.")
-                    Button(onClick = { context.startActivity(Intent(context, IkarSafeBrowserActivity::class.java)) }, modifier = Modifier.fillMaxWidth()) { Text("Ouvrir le navigateur protégé") }
-                    Text("Les réglages du filtre DNS et la vérification de liens sont disponibles dans le Centre de sécurité. Le filtre nécessite l'autorisation VPN Android et une base URLhaus configurée.", style = MaterialTheme.typography.bodySmall)
-                    Button(onClick = { selectedNavigation = "Sécurité" }, modifier = Modifier.fillMaxWidth()) { Text("Accéder aux réglages avancés") }
+                    Text("Contrôles indépendants : navigation WebView avec Safe Browsing Android, analyse heuristique locale, réputation en ligne et résolution DNS. Aucun fichier du téléphone n'est envoyé par ces contrôles.")
+                    Button(
+                        onClick = { context.startActivity(Intent(context, IkarSafeBrowserActivity::class.java)) },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("Ouvrir le navigateur protégé IKAR") }
+                    Text("Safe Browsing dépend des services Android et ne filtre pas les navigateurs externes. Les liens suspects sont suspendus dans le navigateur pour demander confirmation.", style = MaterialTheme.typography.bodySmall)
+                }
+            }
+
+            Card(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("1 · Vérification locale d'un lien", style = MaterialTheme.typography.titleMedium)
+                    Text("Analyse la structure du lien sur le téléphone : protocole, domaine, redirections, raccourcisseurs et signaux d'hameçonnage. Ce contrôle heuristique ne prouve pas qu'un site est malveillant.")
+                    OutlinedTextField(
+                        value = linkInput,
+                        onValueChange = { linkInput = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("Lien ou domaine à examiner") },
+                        singleLine = true
+                    )
+                    Button(
+                        onClick = {
+                            val raw = linkInput.trim()
+                            val normalized = if (raw.startsWith("http://", true) || raw.startsWith("https://", true)) raw else "https://" + raw
+                            val local = SecurityCenter.checkLink(normalized)
+                            val feedMatch = ThreatIntelStore.isKnownMalicious(context, normalized)
+                            webLocalAssessment = if (feedMatch) local.copy(
+                                suspicious = true,
+                                reasons = local.reasons + "Correspondance avec un indicateur URLhaus présent dans la base locale."
+                            ) else local
+                        },
+                        enabled = linkInput.isNotBlank(),
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("Analyser localement") }
+                    webLocalAssessment?.let { report ->
+                        Text(if (report.suspicious) "Alerte : signaux suspects détectés" else "Aucun signal heuristique détecté", style = MaterialTheme.typography.titleSmall)
+                        report.reasons.forEach { reason -> Text("• " + reason, style = MaterialTheme.typography.bodySmall) }
+                        Text("Un résultat sans alerte ne garantit jamais qu'un site est sûr. La base URLhaus locale contient " + threatIntelCount + " indicateur(s).", style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            }
+
+            Card(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("2 · Réputation d'un domaine ou d'une IP", style = MaterialTheme.typography.titleMedium)
+                    Text("Le serveur IKAR consulte les sources de réputation configurées (DNS, URLhaus et ThreatFox). Seul le domaine ou l'adresse IP saisi est transmis ; aucun fichier n'est téléversé.")
+                    OutlinedTextField(
+                        value = webIndicatorInput,
+                        onValueChange = { webIndicatorInput = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("Domaine ou adresse IP") },
+                        singleLine = true
+                    )
+                    Button(
+                        onClick = {
+                            if (!webDomainChecking) {
+                                webDomainChecking = true
+                                webDomainResult = null
+                                scope.launch {
+                                    try {
+                                        webDomainResult = withContext(Dispatchers.IO) {
+                                            IkarOnlineModelGateway.checkDomain(apiToken, webIndicatorInput.trim())
+                                        }
+                                    } catch (error: Exception) {
+                                        webDomainResult = "Échec du contrôle : " + (error.localizedMessage ?: "erreur inconnue")
+                                    } finally {
+                                        webDomainChecking = false
+                                    }
+                                }
+                            }
+                        },
+                        enabled = webIndicatorInput.isNotBlank() && apiToken.isNotBlank() && !webDomainChecking,
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text(if (webDomainChecking) "Vérification en cours…" else "Vérifier la réputation en ligne") }
+                    if (apiToken.isBlank()) {
+                        Text("Le jeton d'accès IKAR n'est pas renseigné. Configure-le dans les réglages du mode connecté de l'Assistant. Ne le partage jamais dans une conversation.", style = MaterialTheme.typography.bodySmall)
+                    }
+                    webDomainResult?.let { result ->
+                        Text(result, style = MaterialTheme.typography.bodySmall)
+                        Text("Interprétation : une absence de signal dans les sources consultées ne garantit pas que le domaine est sûr. Une source indisponible ou une réponse partielle doit être considérée comme non concluante.", style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            }
+
+            Card(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("3 · Résolution DNS sécurisée", style = MaterialTheme.typography.titleMedium)
+                    Text("Interroge le résolveur DNS HTTPS du serveur IKAR. Les réponses DNS indiquent des enregistrements, pas la fiabilité ni l'innocuité du site.")
+                    OutlinedTextField(
+                        value = dnsLookupInput,
+                        onValueChange = { dnsLookupInput = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("Nom de domaine") },
+                        singleLine = true
+                    )
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        listOf("A", "AAAA", "MX", "TXT", "NS").forEach { record ->
+                            Button(
+                                onClick = { dnsRecordType = record },
+                                modifier = Modifier.weight(1f),
+                                colors = if (dnsRecordType == record) ButtonDefaults.buttonColors() else ButtonDefaults.outlinedButtonColors()
+                            ) { Text(record) }
+                        }
+                    }
+                    Button(
+                        onClick = {
+                            if (!dnsLookupRunning) {
+                                dnsLookupRunning = true
+                                dnsLookupResult = null
+                                scope.launch {
+                                    try {
+                                        dnsLookupResult = withContext(Dispatchers.IO) {
+                                            IkarOnlineModelGateway.resolveDns(apiToken, dnsLookupInput.trim(), dnsRecordType)
+                                        }
+                                    } catch (error: Exception) {
+                                        dnsLookupResult = "Échec de la résolution : " + (error.localizedMessage ?: "erreur inconnue")
+                                    } finally {
+                                        dnsLookupRunning = false
+                                    }
+                                }
+                            }
+                        },
+                        enabled = dnsLookupInput.isNotBlank() && apiToken.isNotBlank() && !dnsLookupRunning,
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text(if (dnsLookupRunning) "Résolution en cours…" else "Résoudre le DNS (" + dnsRecordType + ")") }
+                    dnsLookupResult?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+                }
+            }
+
+            Card(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("4 · Filtrage DNS sur l'appareil", style = MaterialTheme.typography.titleMedium)
+                    Text("Le filtre VPN local bloque uniquement les domaines racines présents dans la base URLhaus téléchargée. Il traite le DNS IPv4/UDP intercepté ; DNS chiffré, IPv6, DNS TCP et connexions directes peuvent le contourner. Ce n'est pas un pare-feu complet.")
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Column(Modifier.weight(1f)) {
+                            Text(if (firewallRunning) "Filtre DNS actif selon l'état du service" else "Filtre DNS désactivé")
+                            Text("Indicateurs locaux : " + threatIntelCount, style = MaterialTheme.typography.bodySmall)
+                        }
+                        Switch(
+                            checked = firewallRunning,
+                            onCheckedChange = { enabled ->
+                                if (enabled) {
+                                    val prepare = VpnService.prepare(context)
+                                    if (prepare == null) {
+                                        ContextCompat.startForegroundService(context, Intent(context, IkarDnsFirewallService::class.java))
+                                    } else {
+                                        vpnConsentLauncher.launch(prepare)
+                                    }
+                                } else {
+                                    context.stopService(Intent(context, IkarDnsFirewallService::class.java))
+                                    firewallRunning = false
+                                }
+                            }
+                        )
+                    }
+                    Text("État de la base : " + threatIntelStatus, style = MaterialTheme.typography.bodySmall)
+                    Button(
+                        onClick = { selectedNavigation = "Sécurité" },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("Configurer / actualiser la base URLhaus") }
+                    Text("La base nécessite une clé Auth-Key abuse.ch. L'écran Sécurité permet de l'enregistrer dans Android Keystore et de programmer ses actualisations. Le filtre ne peut pas bloquer un domaine absent de cette base.", style = MaterialTheme.typography.bodySmall)
                 }
             }
         }
