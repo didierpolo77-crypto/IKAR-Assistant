@@ -207,7 +207,9 @@ class YaraForgeUpdateWorker(
                     throw java.io.IOException("Chemin dangereux dans l'archive")
                 }
                 val extension = rawName.substringAfterLast('.', "").lowercase(Locale.ROOT)
-                val accepted = extension in setOf("yar", "yara", "inc", "txt", "md", "json", "yml", "yaml", "license", "licence", "toml")
+                val baseName = rawName.substringAfterLast('/').uppercase(Locale.ROOT)
+                val accepted = extension in setOf("yar", "yara", "inc", "txt", "md", "json", "yml", "yaml", "license", "licence", "toml") ||
+                    baseName in setOf("LICENSE", "COPYING", "NOTICE", "AUTHORS")
                 if (!accepted) { zip.closeEntry(); continue }
                 val target = File(destination, rawName)
                 target.parentFile?.mkdirs()
