@@ -84,12 +84,11 @@ int compile_rule_directory(const std::string& directory, YR_RULES** output, size
     int result = yr_compiler_create(&compiler);
     if (result != ERROR_SUCCESS || compiler == nullptr) return result;
     int compile_errors = 0;
-    size_t index = 0;
     for (const auto& path : files) {
         FILE* input = std::fopen(path.c_str(), "rb");
         if (input == nullptr) { ++compile_errors; continue; }
-        const std::string name_space = "ikar_rule_file_" + std::to_string(index++);
-        compile_errors += yr_compiler_add_file(compiler, input, name_space.c_str(), path.c_str());
+        // Keep a shared namespace so cross-rule dependencies in the curated package resolve.
+        compile_errors += yr_compiler_add_file(compiler, input, "ikar", path.c_str());
         std::fclose(input);
     }
     if (file_count != nullptr) *file_count = files.size();
