@@ -36,3 +36,8 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 POSSIBILITY OF SUCH DAMAGE.
 
 The IKAR JNI bridge is original integration code and is not part of the upstream YARA project.
+
+
+## OpenSSL
+
+- OpenSSL 3.5.9, compiled as a static Android ARMv7 dependency for libyara. Licensed under Apache License 2.0. Source: https://github.com/openssl/openssl/releases/tag/openssl-3.5.9
