@@ -262,9 +262,10 @@ private fun IkarHome(
     onEnableBubble: () -> Unit,
     onDisableBubble: () -> Unit
 ) {
+    val context = LocalContext.current
     var recognizedText by remember { mutableStateOf("Le texte extrait de l'image apparaîtra ici.") }
     var processing by remember { mutableStateOf(false) }
-    var connectedMode by remember { mutableStateOf(false) }
+    var connectedMode by remember { mutableStateOf(context.getSharedPreferences("ikar_runtime_settings", 0).getBoolean("connected_mode", false)) }
     var shareRelevantMemory by remember { mutableStateOf(false) }
     var apiToken by remember { mutableStateOf("") }
     var rememberApiToken by remember { mutableStateOf(false) }
@@ -283,7 +284,6 @@ private fun IkarHome(
     var speakReplies by remember { mutableStateOf(true) }
     var listening by remember { mutableStateOf(false) }
     var bubbleEnabled by remember { mutableStateOf(false) }
-    val context = LocalContext.current
     val runtimeSnapshot = remember { RuntimeDiagnostics.capture(context) }
 
     LaunchedEffect(Unit) {
@@ -1351,7 +1351,11 @@ private fun IkarHome(
                             style = MaterialTheme.typography.bodySmall
                         )
                     }
-                    Switch(checked = connectedMode, onCheckedChange = { connectedMode = it })
+                    Switch(checked = connectedMode, onCheckedChange = { enabled ->
+                        connectedMode = enabled
+                        context.getSharedPreferences("ikar_runtime_settings", 0).edit()
+                            .putBoolean("connected_mode", enabled).apply()
+                    })
                 }
                 if (connectedMode) {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
