@@ -8,6 +8,7 @@
 #include <yara/libyara.h>
 #include <yara/compiler.h>
 #include <yara/rules.h>
+#include <yara/scan.h>
 
 namespace {
 pthread_once_t g_yara_once = PTHREAD_ONCE_INIT;
