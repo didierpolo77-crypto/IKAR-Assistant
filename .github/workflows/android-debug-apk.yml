@@ -31,7 +31,7 @@ jobs:
           ANDROID_API: "23"
           OPENSSL_TAG: openssl-3.5.9
         run: bash scripts/build-libyara-android-armv7.sh
-      - name: Validate YARA Forge Core rules with YARA 4.5.0
+      - name: Validate YARA Forge Full rules with YARA 4.5.0
         run: |
           git clone --depth 1 --branch v4.5.0 https://github.com/VirusTotal/yara.git /tmp/yara-host
           cd /tmp/yara-host
