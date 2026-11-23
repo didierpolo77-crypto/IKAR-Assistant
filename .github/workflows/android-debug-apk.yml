@@ -30,6 +30,15 @@ jobs:
           YARA_TAG: v4.5.0
           ANDROID_API: "23"
         run: bash scripts/build-libyara-android-armv7.sh
+      - name: Validate YARA Forge Core rules with YARA 4.5.0
+        run: |
+          git clone --depth 1 --branch v4.5.0 https://github.com/VirusTotal/yara.git /tmp/yara-host
+          cd /tmp/yara-host
+          ./bootstrap.sh
+          ./configure --disable-shared --enable-static --without-crypto
+          make -j2
+          cd "$GITHUB_WORKSPACE"
+          python3 scripts/validate-yara-forge-package.py /tmp/yara-host/yarac
       - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
