@@ -30,6 +30,7 @@ jobs:
       - name: Build official libyara for armeabi-v7a
         env:
           YARA_TAG: v4.5.0
+          OPENSSL_TAG: openssl-3.5.9
           ANDROID_API: "23"
         run: bash scripts/build-libyara-android-armv7.sh
       - name: Verify archive and ARMv7 object architecture
@@ -44,10 +45,19 @@ jobs:
           test -n "$OBJECT"
           "$ANDROID_HOME/ndk/27.2.12479018/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf" -h "$OBJECT" | tee /tmp/yara-elf-header.txt
           grep -q "ARM" /tmp/yara-elf-header.txt
-      - name: Upload ARMv7 libyara prototype
+          OPENSSL_ARCHIVE="$GITHUB_WORKSPACE/artifacts/openssl/armeabi-v7a/libcrypto.a"
+          test -s "$OPENSSL_ARCHIVE"
+          mkdir -p /tmp/openssl-verify
+          cd /tmp/openssl-verify
+          "$ANDROID_HOME/ndk/27.2.12479018/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar" x "$OPENSSL_ARCHIVE"
+          OPENSSL_OBJECT=$(find . -type f | head -n 1)
+          test -n "$OPENSSL_OBJECT"
+          "$ANDROID_HOME/ndk/27.2.12479018/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf" -h "$OPENSSL_OBJECT" | tee /tmp/openssl-elf-header.txt
+          grep -q "ARM" /tmp/openssl-elf-header.txt
+      - name: Upload ARMv7 libyara and OpenSSL prototype
         uses: actions/upload-artifact@v4
         with:
           name: ikar-libyara-android-armeabi-v7a-prototype
-          path: artifacts/libyara/
+          path: artifacts/
           if-no-files-found: error
           retention-days: 14
