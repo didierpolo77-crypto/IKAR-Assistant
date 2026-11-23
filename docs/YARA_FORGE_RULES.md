@@ -14,7 +14,7 @@ YARA Forge curates and standardizes rules from vetted upstream repositories. Rul
 - IKAR reads the latest release metadata over HTTPS, selects only the official Core asset, checks the declared archive size and SHA-256 digest, and rejects unexpected URLs.
 - The ZIP extractor rejects path traversal, oversized entries, excessive file counts, and expanded archives larger than 40 MiB.
 - Only YARA rule files and documentation/license metadata are extracted.
-- The candidate rule directory is compiled with the bundled official libyara JNI engine linked with static OpenSSL 3.5.9 for the PE and hash modules before it can replace the active database.
+- The candidate rule directory is compiled with the bundled official libyara JNI engine linked with static OpenSSL 3.5.9 for the PE and hash modules before it can replace the active database. IKAR's own bundled starter rules are retained in a separate namespace alongside the YARA Forge community rules.
 - Activation uses a staging directory and a previous-directory rollback. An invalid or incomplete update must not replace the last working rules.
 - The active rules remain in app-private storage and can be used offline after download.
 
