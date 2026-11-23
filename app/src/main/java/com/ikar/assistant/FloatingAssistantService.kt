@@ -320,7 +320,8 @@ class FloatingAssistantService : Service() {
                 scroll.post { scroll.fullScroll(View.FOCUS_DOWN) }
                 send.isEnabled = false
                 serviceScope.launch {
-                    val reply = withContext(Dispatchers.IO) {
+                    try {
+                        val reply = withContext(Dispatchers.IO) {
                         val dao = MemoryDatabase.getInstance(applicationContext).memoryDao()
                         val previousEntries = dao.getAll()
                         val history = previousEntries
@@ -373,11 +374,21 @@ class FloatingAssistantService : Service() {
                         dao.insert(MemoryEntry(type = "ASSISTANT_MESSAGE", content = answer))
                         answer
                     }
-                    transcript.removeView(waiting)
-                    appendChatBubble(transcript, reply, fromIkar = true)
-                    send.isEnabled = true
-                    scroll.post { scroll.fullScroll(View.FOCUS_DOWN) }
-                    if (speechOutputReady) speechOutput?.speak(reply.take(2500), TextToSpeech.QUEUE_FLUSH, null, "ikar-floating-reply")
+                        transcript.removeView(waiting)
+                        appendChatBubble(transcript, reply, fromIkar = true)
+                        scroll.post { scroll.fullScroll(View.FOCUS_DOWN) }
+                        if (speechOutputReady) speechOutput?.speak(reply.take(2500), TextToSpeech.QUEUE_FLUSH, null, "ikar-floating-reply")
+                    } catch (error: Exception) {
+                        transcript.removeView(waiting)
+                        appendChatBubble(
+                            transcript,
+                            error.localizedMessage ?: "IKAR n'a pas pu traiter cette demande. Réessaie.",
+                            fromIkar = true
+                        )
+                        scroll.post { scroll.fullScroll(View.FOCUS_DOWN) }
+                    } finally {
+                        send.isEnabled = true
+                    }
                 }
             }
         }
