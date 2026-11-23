@@ -84,6 +84,37 @@ class IkarSafeBrowserActivity : Activity() {
                     return true
                 }
 
+                override fun onPageStarted(view: WebView, url: String?, favicon: android.graphics.Bitmap?) {
+                    status.text = "Chargement de la page…"
+                }
+
+                override fun onPageFinished(view: WebView, url: String?) {
+                    if (!url.isNullOrBlank()) {
+                        address.setText(url)
+                        status.text = "Page chargée · Safe Browsing Android et contrôles locaux actifs selon disponibilité."
+                    }
+                }
+
+                override fun onReceivedError(
+                    view: WebView,
+                    request: WebResourceRequest,
+                    error: android.webkit.WebResourceError
+                ) {
+                    if (request.isForMainFrame) {
+                        status.text = "Échec du chargement : ${error.description}. Vérifie Internet ou l'adresse."
+                    }
+                }
+
+                override fun onReceivedHttpError(
+                    view: WebView,
+                    request: WebResourceRequest,
+                    errorResponse: android.webkit.WebResourceResponse
+                ) {
+                    if (request.isForMainFrame) {
+                        status.text = "Le site a répondu HTTP ${errorResponse.statusCode}."
+                    }
+                }
+
                 override fun onReceivedSslError(view: WebView, handler: SslErrorHandler, error: SslError) {
                     handler.cancel()
                     status.text = "Connexion TLS invalide : navigation bloquée."
@@ -117,16 +148,19 @@ class IkarSafeBrowserActivity : Activity() {
         address.setText(initial)
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+            status.text = "Initialisation de Safe Browsing · chargement de la page…"
+            // Navigation must not depend on the asynchronous Safe Browsing callback:
+            // some WebView providers may delay or fail that callback.
+            loadAddress(initial)
             WebView.startSafeBrowsing(applicationContext) { ready ->
                 runOnUiThread {
-                    status.text = if (ready) {
-                        "Safe Browsing Android activé · menaces connues vérifiées"
-                    } else {
-                        "Safe Browsing indisponible · prudence renforcée"
+                    if (!isFinishing && !isDestroyed) {
+                        status.text = if (ready) {
+                            "Safe Browsing Android activé · menaces connues vérifiées"
+                        } else {
+                            "Safe Browsing indisponible · prudence renforcée"
+                        }
                     }
-                    // Keep navigation available when Android Safe Browsing cannot initialize,
-                    // but state the limitation explicitly instead of claiming full protection.
-                    loadAddress(initial)
                 }
             }
         } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
