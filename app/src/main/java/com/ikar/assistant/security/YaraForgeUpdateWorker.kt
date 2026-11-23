@@ -93,7 +93,7 @@ class YaraForgeUpdateWorker(
                 val candidate = assets.optJSONObject(index) ?: continue
                 if (candidate.optString("name") == ASSET_NAME) { asset = candidate; break }
             }
-            val selected = asset ?: return fail("Paquet YARA Forge core introuvable.")
+            val selected = asset ?: return fail("Paquet YARA Forge Full introuvable.")
             val downloadUrl = selected.optString("browser_download_url")
             val expectedDigest = selected.optString("digest").removePrefix("sha256:").lowercase(Locale.ROOT)
             val expectedSize = selected.optLong("size", -1L)
