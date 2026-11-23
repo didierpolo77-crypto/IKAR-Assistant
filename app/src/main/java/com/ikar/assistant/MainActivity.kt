@@ -89,6 +89,7 @@ import com.ikar.assistant.security.PendingActionCenter
 import com.ikar.assistant.security.ActionAudit
 import com.ikar.assistant.security.FolderRiskReport
 import com.ikar.assistant.security.ThreatIntelStore
+import com.ikar.assistant.security.MalwareBazaarStore
 import com.ikar.assistant.security.YaraForgeRulesScheduler
 import com.ikar.assistant.security.YaraForgeRulesStatus
 import com.ikar.assistant.security.ThreatIntelScheduler
@@ -332,6 +333,8 @@ private fun IkarHome(
     var emergencyMode by remember { mutableStateOf(SecurityCenter.isEmergency(context)) }
     var securityEvents by remember { mutableStateOf<List<MemoryEntry>>(emptyList()) }
     var threatIntelAuthKey by remember { mutableStateOf("") }
+    var malwareBazaarApiKey by remember { mutableStateOf("") }
+    var malwareBazaarStatus by remember { mutableStateOf(if (MalwareBazaarStore.hasAuthKey(context)) "Clé MalwareBazaar enregistrée de façon chiffrée." else "Clé MalwareBazaar non configurée.") }
     var threatIntelStatus by remember { mutableStateOf("Base de réputation non configurée.") }
     var yaraForgeStatus by remember { mutableStateOf(YaraForgeRulesStatus.status(context)) }
     var threatIntelCount by remember { mutableIntStateOf(ThreatIntelStore.indicatorCount(context)) }
@@ -825,6 +828,29 @@ private fun IkarHome(
                         Text(it, style = MaterialTheme.typography.bodySmall)
                     }
                     report.updateAssessment?.let { Text("Compatibilité de mise à jour : $it", style = MaterialTheme.typography.bodySmall) }
+                    report.malwareBazaar?.let { intel ->
+                        Card(Modifier.fillMaxWidth()) {
+                            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                                Text("Identification MalwareBazaar", style = MaterialTheme.typography.titleSmall)
+                                if (intel.exactHashMatch) {
+                                    Text("Correspondance exacte SHA-256", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.titleMedium)
+                                    Text("Famille : \${intel.family ?: "non renseignée"}")
+                                    intel.sampleName?.let { Text("Nom du fichier référencé : $it", style = MaterialTheme.typography.bodySmall) }
+                                    if (intel.tags.isNotEmpty()) Text("Tags : \${intel.tags.joinToString(", ")}", style = MaterialTheme.typography.bodySmall)
+                                } else {
+                                    Text("Aucune correspondance exacte SHA-256 connue.", style = MaterialTheme.typography.bodyMedium)
+                                    if (intel.relatedRuleFamilies.isNotEmpty()) {
+                                        Text("Familles associées aux règles YARA", style = MaterialTheme.typography.titleSmall)
+                                        intel.relatedRuleFamilies.forEach { (rule, families) ->
+                                            Text("$rule : \${families.joinToString(", ")}", style = MaterialTheme.typography.bodySmall)
+                                        }
+                                        Text("Ces familles proviennent d'autres échantillons liés aux règles ; elles ne constituent pas une identification exacte de ce fichier.", style = MaterialTheme.typography.bodySmall)
+                                    }
+                                }
+                                Text(intel.status, style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
+                    }
                     if (report.indicators.isEmpty()) {
                         Text("Aucun indicateur détecté par les règles locales actuelles.")
                     } else {
@@ -1187,6 +1213,37 @@ private fun IkarHome(
                 Text(threatIntelStatus, style = MaterialTheme.typography.bodySmall)
                 Text("URLs actives : $threatIntelCount · empreintes SHA-256 : ${ThreatIntelStore.hashCount(context)} · Dernière mise à jour : ${ThreatIntelStore.lastUpdatedAt(context).takeIf { it > 0 }?.let { java.text.DateFormat.getDateTimeInstance().format(java.util.Date(it)) } ?: "jamais"}", style = MaterialTheme.typography.bodySmall)
                 Text("Sans clé valide, aucune base URLhaus n'est téléchargée et seules les règles locales restent actives.", style = MaterialTheme.typography.bodySmall)
+                Divider()
+                Text("Identification des menaces — MalwareBazaar", style = MaterialTheme.typography.titleMedium)
+                Text("MalwareBazaar complète libyara et YARA Forge Full : recherche exacte par SHA-256, noms de familles et tags. Pour les règles YARA, IKAR peut aussi afficher les familles observées dans les échantillons associés à une règle, sans prétendre que cette famille est celle du fichier analysé. Seules les empreintes et les noms de règles sont envoyés ; aucun fichier ni échantillon n'est téléversé.", style = MaterialTheme.typography.bodySmall)
+                Button(onClick = {
+                    runCatching {
+                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://auth.abuse.ch/")))
+                    }.onFailure { malwareBazaarStatus = "Impossible d'ouvrir le portail abuse.ch." }
+                }, modifier = Modifier.fillMaxWidth()) {
+                    Text("Obtenir une clé MalwareBazaar gratuite")
+                }
+                OutlinedTextField(
+                    value = malwareBazaarApiKey,
+                    onValueChange = { malwareBazaarApiKey = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Auth-Key MalwareBazaar") },
+                    visualTransformation = PasswordVisualTransformation(),
+                    singleLine = true
+                )
+                Button(onClick = {
+                    try {
+                        MalwareBazaarStore.saveAuthKey(context, malwareBazaarApiKey)
+                        malwareBazaarApiKey = ""
+                        malwareBazaarStatus = "Clé MalwareBazaar enregistrée et chiffrée dans Android Keystore. Elle sera utilisée lors des prochaines analyses."
+                    } catch (error: Exception) {
+                        malwareBazaarStatus = "Impossible d'enregistrer la clé : \${error.localizedMessage ?: "vérifie la clé"}"
+                    }
+                }, enabled = malwareBazaarApiKey.length >= 16, modifier = Modifier.fillMaxWidth()) {
+                    Text("Enregistrer la clé MalwareBazaar")
+                }
+                Text(malwareBazaarStatus, style = MaterialTheme.typography.bodySmall)
+                Text("Les informations déjà mises en cache restent consultables hors connexion. Sans Auth-Key, l'identification en ligne n'est pas disponible.", style = MaterialTheme.typography.bodySmall)
                 Divider()
                 Text("Protection Web", style = MaterialTheme.typography.titleMedium)
                 Text("La navigation protégée, l’analyse des liens, la réputation des domaines, la résolution DNS et le filtre VPN disposent maintenant de leur propre écran.", style = MaterialTheme.typography.bodySmall)
