@@ -660,10 +660,10 @@ private fun IkarHome(
                         selectedNavigation = "Outils"
                     },
                     onOpenWeb = {
-                        selectedNavigation = "Sécurité"
+                        selectedNavigation = "Protection Web"
                     },
                     onOpenDevice = {
-                        selectedNavigation = "Sécurité"
+                        selectedNavigation = "Appareil"
                     }
                 )
                 PendingActionCenter(memoryDao = memoryDao)
@@ -840,6 +840,7 @@ private fun IkarHome(
         }
 
 
+        if (selectedNavigation == "Appareil") {
         Card(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text("Diagnostic de l'appareil", modifier = Modifier.bringIntoViewRequester(deviceRequester), style = MaterialTheme.typography.titleMedium)
@@ -852,9 +853,22 @@ private fun IkarHome(
         }
 
         BatteryTestPanel()
-
         SystemAccessCenter()
+        }
 
+        if (selectedNavigation == "Protection Web") {
+            Card(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("Protection Web IKAR", style = MaterialTheme.typography.titleLarge)
+                    Text("Navigation protégée Android Safe Browsing, vérification heuristique de liens, réputation URLhaus et filtre DNS local VPN. Ces protections ont des limites : le filtre DNS ne couvre pas tous les flux ni les DNS chiffrés.")
+                    Button(onClick = { context.startActivity(Intent(context, IkarSafeBrowserActivity::class.java)) }, modifier = Modifier.fillMaxWidth()) { Text("Ouvrir le navigateur protégé") }
+                    Text("Les réglages du filtre DNS et la vérification de liens sont disponibles dans le Centre de sécurité. Le filtre nécessite l'autorisation VPN Android et une base URLhaus configurée.", style = MaterialTheme.typography.bodySmall)
+                    Button(onClick = { selectedNavigation = "Sécurité" }, modifier = Modifier.fillMaxWidth()) { Text("Accéder aux réglages avancés") }
+                }
+            }
+        }
+
+        if (selectedNavigation == "Sécurité") {
         Card(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Centre de sécurité avancé", style = MaterialTheme.typography.titleLarge)
@@ -1041,6 +1055,8 @@ private fun IkarHome(
                 }
                 Text("Mises à jour sécurisées : les indicateurs URLhaus sont utilisés comme réputation de domaines/URLs de distribution de malwares. Ils ne remplacent pas des signatures de fichiers YARA ou ClamAV.", style = MaterialTheme.typography.bodySmall)
             }
+        }
+
         }
 
         }
@@ -1452,12 +1468,10 @@ private fun IkarHome(
 
       NavigationBar(containerColor = Color(0xFF0B110B), contentColor = Color(0xFF78E000)) {
           val destinations = listOf(
-              Triple("Accueil", "⌂", homeRequester),
-              Triple("Sécurité", "⬡", securityRequester),
-              Triple("Assistant", "✦", assistantRequester),
-              Triple("Outils", "▦", toolsRequester)
+              "Accueil" to "⌂", "Sécurité" to "⬡", "Protection Web" to "◎",
+              "Appareil" to "⌁", "Assistant" to "✦", "Outils" to "▦"
           )
-          destinations.forEach { (label, symbol, requester) ->
+          destinations.forEach { (label, symbol) ->
               NavigationBarItem(
                   selected = selectedNavigation == label,
                   onClick = {
