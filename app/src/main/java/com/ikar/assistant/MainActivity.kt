@@ -639,6 +639,7 @@ private fun IkarHome(
             .padding(horizontal = 16.dp, vertical = 18.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
       ) {
+        if (selectedNavigation == "Accueil") {
         Box(Modifier.fillMaxWidth().bringIntoViewRequester(homeRequester)) {
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 IkarBrandHeader()
@@ -667,6 +668,8 @@ private fun IkarHome(
                 )
                 PendingActionCenter(memoryDao = memoryDao)
             }
+        }
+
         }
 
         if (selectedNavigation == "Sécurité") {
