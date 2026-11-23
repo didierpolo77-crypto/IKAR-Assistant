@@ -289,13 +289,6 @@ private fun IkarHome(
             credentialStatus = "Jeton restauré depuis le stockage chiffré de cet appareil."
         }
     }
-
-    LaunchedEffect(Unit) {
-        while (true) {
-            yaraForgeStatus = YaraForgeRulesStatus.status(context)
-            kotlinx.coroutines.delay(3000)
-        }
-    }
     val recognizerState = remember { mutableStateOf<SpeechRecognizer?>(null) }
     var memoryError by remember { mutableStateOf<String?>(null) }
     var backendStatus by remember { mutableStateOf<String?>(null) }
@@ -348,6 +341,13 @@ private fun IkarHome(
     var notificationsSeen by remember { mutableIntStateOf(context.getSharedPreferences("ikar_notification_privacy", android.content.Context.MODE_PRIVATE).getInt("notifications_seen", 0)) }
     var sensitiveNotifications by remember { mutableIntStateOf(context.getSharedPreferences("ikar_notification_privacy", android.content.Context.MODE_PRIVATE).getInt("sensitive_count", 0)) }
     var lastNotificationCategory by remember { mutableStateOf(context.getSharedPreferences("ikar_notification_privacy", android.content.Context.MODE_PRIVATE).getString("last_category", "Aucune") ?: "Aucune") }
+
+    LaunchedEffect(Unit) {
+        while (true) {
+            yaraForgeStatus = YaraForgeRulesStatus.status(context)
+            kotlinx.coroutines.delay(3000)
+        }
+    }
 
     DisposableEffect(Unit) {
         onDispose {
