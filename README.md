@@ -61,7 +61,7 @@ Cette vue décrit honnêtement l'état des fonctions. Elle ne signifie pas que l
 
 ## Version 0.70.0 — moteur natif et règles YARA Forge
 
-- Passage à la bibliothèque officielle libyara 4.5.0 via JNI pour ARMv7.
+- Passage à la bibliothèque officielle libyara 4.5.0 via JNI pour ARMv7, liée à OpenSSL 3.5.9 LTS statique pour les modules PE et hash.
 - Ajout du téléchargement, de la validation et du stockage hors ligne du paquet YARA Forge Core.
 - Ajout de la mise à jour automatique quotidienne et du bouton d'actualisation manuelle.
 - Le contrôle CI compile le paquet de règles avec la même version YARA et la configuration sans crypto utilisée par le build Android.
