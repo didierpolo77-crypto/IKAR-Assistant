@@ -99,14 +99,14 @@ object FileScanner {
                 else -> emptyList()
             }
             yaraMatches.forEach { match ->
-                indicators += "Règle YARA locale \${match.rule} : \${match.detail}"
+                indicators += "Règle YARA locale ${match.rule} : ${match.detail}"
             }
             // Enrich local YARA/hash results with MalwareBazaar metadata. Only hashes and rule names leave the device.
             val malwareBazaar = MalwareBazaarClient.enrich(context, hash, yaraMatches.map { it.rule })
             if (malwareBazaar?.exactHashMatch == true) {
-                indicators += "Empreinte SHA-256 confirmée dans MalwareBazaar\${malwareBazaar.family?.let { " : famille $it" } ?: ""}."
+                indicators += "Empreinte SHA-256 confirmée dans MalwareBazaar${malwareBazaar.family?.let { " : famille $it" } ?: ""}."
             } else if (malwareBazaar?.relatedRuleFamilies?.isNotEmpty() == true) {
-                indicators += "Familles associées aux règles YARA (références MalwareBazaar, pas identification exacte) : \${malwareBazaar.relatedRuleFamilies.values.flatten().distinct().joinToString(", ")}."
+                indicators += "Familles associées aux règles YARA (références MalwareBazaar, pas identification exacte) : ${malwareBazaar.relatedRuleFamilies.values.flatten().distinct().joinToString(", ")}."
             }
             val clamAvStatus = ClamAvEngineStatus.inspect(context)
 
