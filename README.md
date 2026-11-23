@@ -86,3 +86,15 @@ Les résultats « aucun indicateur détecté » ne constituent pas une garantie 
 - Tant que cette intégration native n'est pas compilée et exécutée sur appareil, l'évaluateur de règles intégré reste un sous-ensemble interne et ne doit pas être présenté comme libyara.
 - ClamAV reste indisponible dans l'application. Le projet amont documente le cross-compiling Linux ARM64, mais cela ne constitue pas une prise en charge Android ; une intégration Android exigerait un portage de ses dépendances, un pont JNI, des bases de signatures adaptées et des essais sur appareil.
 - Les résultats de scan doivent continuer à afficher séparément SHA-256, règles locales, réputation URLhaus et disponibilité ClamAV.
+
+
+## Évaluation des moteurs antivirus alternatifs (23 novembre 2026)
+
+Le candidat open source le plus proche d'un moteur combinant les rôles de YARA et ClamAV est **HydraDragonAV Mobile** : son code documente un moteur Rust JNI qui associe YARA-X, des signatures compatibles ClamAV, l'extraction d'archives et l'analyse statique Android. Toutefois, son dépôt indique que le projet mobile est en pause, sa licence est GPL-2.0-or-later, et la prise en charge ARMv7/armeabi-v7a n'est pas encore validée pour IKAR. Il exige aussi Android API 26 minimum. Il ne sera donc pas copié dans IKAR avant audit de licence, audit de sécurité, vérification des dépendances et compilation/test réels sur ARMv7.
+
+Autres candidats examinés :
+- **Avira MAVAPI** : SDK antivirus Android commercial documenté pour 32 et 64 bits, avec JNI/Kotlin/Java et analyse de fichiers. C'est l'alternative fournisseur la plus proche d'un moteur antivirus complet, mais elle dépend d'une licence et d'un accès SDK.
+- **Hypatia** : moteur Android hors ligne fondé sur des signatures de type ClamAV, mais le dépôt amont est archivé et sous AGPL-3.0 ; ce n'est pas un remplacement direct de YARA.
+- **anti-android-virus (aav)** : moteur C++17 Android orienté analyse statique DEX/APK, sous MIT, mais son dépôt se décrit comme recherche/éducation et sa base fournie ne contient que des signatures synthétiques ; il ne remplace pas un moteur antivirus généraliste.
+
+Décision : ne pas remplacer aveuglément YARA/ClamAV par une bibliothèque non vérifiée. Priorité à un prototype isolé HydraDragonAV Mobile sur ARMv7, sans toucher au moteur actuel ; si ce candidat échoue à la compilation, à l'audit ou aux tests, garder une architecture IKAR modulaire et comparer une intégration sous licence Avira MAVAPI. Toute solution de repli doit disposer de vraies signatures actualisables hors ligne, d'une analyse de fichiers/APK, de tests EICAR et de fichiers de test bénins, et d'un rapport séparant détection, suspicion et absence de moteur.
