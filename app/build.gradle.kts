@@ -15,6 +15,7 @@ android {
         targetSdk = 34
         versionCode = 69
         versionName = "0.69.0"
+        ndk { abiFilters += "armeabi-v7a" }
     }
 
     buildTypes {
@@ -41,6 +42,15 @@ android {
     buildFeatures {
         compose = true
     }
+
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+            version = "3.22.1"
+        }
+    }
+
+    ndkVersion = "27.2.12479018"
 }
 
 dependencies {
