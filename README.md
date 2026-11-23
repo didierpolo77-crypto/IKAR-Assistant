@@ -77,6 +77,7 @@ Cette vue décrit honnêtement l'état des fonctions. Elle ne signifie pas que l
 - Le moteur Kotlin limité reste un secours explicite si la bibliothèque native ne se charge pas ; il ne doit jamais être présenté comme libyara officiel.
 - Les règles YARA Forge conservent les licences et attributions de leurs auteurs amont. YARA détecte des motifs définis par les règles et ne garantit pas la détection de tous les malwares.
 - L'analyse de fichiers conserve SHA-256, URLhaus, quarantaine AES-GCM et historique. ClamAV natif n'est pas embarqué et aucune analyse ClamAV n'est simulée.
+- Les indicateurs URLhaus sont stockés dans une base SQLite locale indexée, avec migration des anciennes données et sans plafond de lignes défini par IKAR. Le flux public interrogé par IKAR reste limité aux 1 000 entrées récentes par requête ; cela ne constitue pas un téléchargement de l'historique complet d'URLhaus.
 
 Les résultats « aucun indicateur détecté » ne constituent pas une garantie d'innocuité. Android sans root ne permet pas à IKAR d'inspecter toutes les données privées des autres applications. Le détail du flux de mise à jour est dans [docs/YARA_FORGE_RULES.md](docs/YARA_FORGE_RULES.md).
 
