@@ -72,6 +72,7 @@ import com.ikar.assistant.ai.OfflineChatEngine
 import com.ikar.assistant.ai.ConversationTurn
 import com.ikar.assistant.ai.ConversationContextBuilder
 import com.ikar.assistant.ai.IkarOnlineModelGateway
+import com.ikar.assistant.ai.IkarCredentialStore
 import com.ikar.assistant.ai.MemoryCommandParser
 import com.ikar.assistant.ai.IkarOrchestrator
 import com.ikar.assistant.ai.WebResearch
@@ -256,6 +257,8 @@ private fun IkarHome(
     var connectedMode by remember { mutableStateOf(false) }
     var shareRelevantMemory by remember { mutableStateOf(false) }
     var apiToken by remember { mutableStateOf("") }
+    var rememberApiToken by remember { mutableStateOf(false) }
+    var credentialStatus by remember { mutableStateOf<String?>(null) }
     var noteText by remember { mutableStateOf("") }
     var taskTitle by remember { mutableStateOf("") }
     var reminderMinutes by remember { mutableStateOf("30") }
@@ -272,6 +275,15 @@ private fun IkarHome(
     var bubbleEnabled by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val runtimeSnapshot = remember { RuntimeDiagnostics.capture(context) }
+
+    LaunchedEffect(Unit) {
+        val savedToken = IkarCredentialStore.load(context)
+        if (savedToken != null) {
+            apiToken = savedToken
+            rememberApiToken = true
+            credentialStatus = "Jeton restauré depuis le stockage chiffré de cet appareil."
+        }
+    }
     val recognizerState = remember { mutableStateOf<SpeechRecognizer?>(null) }
     var memoryError by remember { mutableStateOf<String?>(null) }
     var backendStatus by remember { mutableStateOf<String?>(null) }
@@ -1252,17 +1264,66 @@ private fun IkarHome(
                     }
                     OutlinedTextField(
                         value = apiToken,
-                        onValueChange = { apiToken = it },
+                        onValueChange = { value ->
+                            apiToken = value
+                            if (rememberApiToken) {
+                                try {
+                                    if (value.isBlank()) {
+                                        IkarCredentialStore.clear(context)
+                                        credentialStatus = "Le jeton mémorisé a été effacé."
+                                    } else {
+                                        IkarCredentialStore.save(context, value)
+                                        credentialStatus = "Jeton mis à jour dans le stockage chiffré."
+                                    }
+                                } catch (error: Exception) {
+                                    rememberApiToken = false
+                                    IkarCredentialStore.clear(context)
+                                    credentialStatus = "Enregistrement chiffré impossible : ${error.localizedMessage ?: "erreur Android"}"
+                                }
+                            }
+                        },
                         modifier = Modifier.fillMaxWidth(),
                         label = { Text("Jeton d'accès IKAR (IKAR_API_TOKEN)") },
                         visualTransformation = PasswordVisualTransformation(),
                         singleLine = true,
                         enabled = !sendingMessage && !testingInference
                     )
-                    Text(
-                        "Le jeton reste uniquement en mémoire pendant cette session et n'est pas enregistré dans l'application.",
-                        style = MaterialTheme.typography.bodySmall
-                    )
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Column(Modifier.weight(1f)) {
+                            Text("Mémoriser le jeton sur cet appareil")
+                            Text(
+                                if (rememberApiToken) "Enregistré chiffré avec Android Keystore."
+                                else "Désactivé par défaut : le jeton reste en mémoire jusqu'à la fermeture de l'application.",
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                        Switch(
+                            checked = rememberApiToken,
+                            onCheckedChange = { enabled ->
+                                if (enabled) {
+                                    if (apiToken.isBlank()) {
+                                        credentialStatus = "Saisis d'abord le jeton IKAR avant de l'enregistrer."
+                                    } else {
+                                        try {
+                                            IkarCredentialStore.save(context, apiToken)
+                                            rememberApiToken = true
+                                            credentialStatus = "Jeton enregistré de façon chiffrée sur cet appareil."
+                                        } catch (error: Exception) {
+                                            rememberApiToken = false
+                                            credentialStatus = "Enregistrement chiffré impossible : ${error.localizedMessage ?: "erreur Android"}"
+                                        }
+                                    }
+                                } else {
+                                    IkarCredentialStore.clear(context)
+                                    rememberApiToken = false
+                                    credentialStatus = "Jeton mémorisé supprimé de cet appareil."
+                                }
+                            }
+                        )
+                    }
+                    credentialStatus?.let {
+                        Text(it, style = MaterialTheme.typography.bodySmall)
+                    }
                     Button(
                         onClick = {
                             if (!checkingBackend) {
