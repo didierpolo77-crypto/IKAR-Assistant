@@ -48,13 +48,12 @@ jobs:
         run: |
           APK=app/build/outputs/apk/debug/app-debug.apk
           test -s "$APK"
-          LIBS=$(unzip -Z1 "$APK" | grep '^lib/' || true)
-          if [ -n "$LIBS" ]; then
-            echo "Native libraries detected in APK."
-            echo "$LIBS" | grep -q '^lib/armeabi-v7a/' || { echo 'Missing armeabi-v7a native libraries'; exit 1; }
-          else
-            echo "No packaged native libraries: Kotlin/Java bytecode remains ABI-neutral."
-          fi
+          NATIVE_LIB=lib/armeabi-v7a/libikar_yara.so
+          unzip -Z1 "$APK" | grep -qx "$NATIVE_LIB" || { echo "Missing official libyara JNI library: $NATIVE_LIB"; exit 1; }
+          unzip -p "$APK" "$NATIVE_LIB" > /tmp/libikar_yara.so
+          NDK_BIN="$ANDROID_HOME/ndk/27.2.12479018/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          "$NDK_BIN/llvm-readelf" -h /tmp/libikar_yara.so | tee /tmp/ikar-yara-elf.txt
+          grep -q "ARM" /tmp/ikar-yara-elf.txt || { echo "JNI library is not ARMv7"; exit 1; }
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
