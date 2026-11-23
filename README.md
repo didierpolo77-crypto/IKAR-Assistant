@@ -62,7 +62,7 @@ Cette vue décrit honnêtement l'état des fonctions. Elle ne signifie pas que l
 ## Version 0.70.0 — moteur natif et règles YARA Forge
 
 - Passage à la bibliothèque officielle libyara 4.5.0 via JNI pour ARMv7, liée à OpenSSL 3.5.9 LTS statique pour les modules PE et hash.
-- Ajout du téléchargement, de la validation et du stockage hors ligne du paquet YARA Forge Core.
+- Ajout du téléchargement, de la validation et du stockage hors ligne du paquet YARA Forge Full.
 - Ajout de la mise à jour automatique quotidienne et du bouton d'actualisation manuelle.
 - Le contrôle CI compile le paquet de règles avec la même version YARA et la configuration OpenSSL activée utilisée par le build Android.
 - Le test d'exécution sur le téléphone physique reste une étape distincte après livraison de l'APK.
@@ -71,7 +71,7 @@ Cette vue décrit honnêtement l'état des fonctions. Elle ne signifie pas que l
 
 - Le moteur officiel libyara 4.5.0 est compilé pour Android ARMv7 via NDK/JNI et embarqué dans l'APK sous `lib/armeabi-v7a/libikar_yara.so`. Le workflow contrôle explicitement sa présence et son architecture ELF.
 - Le scanner natif charge le dossier de règles local et met en cache les règles compilées jusqu'à la prochaine génération de base. La limite d'analyse YARA de 16 MiB et le délai natif de 20 secondes sont conservés pour les appareils ARM32.
-- IKAR utilise le paquet **Core de YARA Forge**. L'application vérifie le digest SHA-256 et la taille de l'archive, extrait les règles dans un dossier temporaire, puis les compile avec libyara avant activation.
+- IKAR utilise le paquet **Full de YARA Forge**. L'application vérifie le digest SHA-256 et la taille de l'archive, extrait les règles dans un dossier temporaire, puis les compile avec libyara avant activation.
 - Une mise à jour est planifiée au démarrage et toutes les 24 heures si le réseau est disponible. Un bouton permet également de demander une actualisation manuelle depuis le module Antivirus local.
 - La dernière base validée reste stockée dans le répertoire privé de l'application et fonctionne hors connexion. Une mise à jour invalide ne doit pas remplacer la base active.
 - Le moteur Kotlin limité reste un secours explicite si la bibliothèque native ne se charge pas ; il ne doit jamais être présenté comme libyara officiel.
@@ -91,7 +91,7 @@ Les résultats « aucun indicateur détecté » ne constituent pas une garantie 
 ## État de l'intégration native Android
 
 - libyara 4.5.0 ARMv7 est intégré au pipeline de compilation APK. La validation finale doit encore inclure la compilation des paquets YARA Forge et un essai d'exécution sur le téléphone physique.
-- Le paquet YARA Forge Core est la source principale de règles actualisables ; les règles restent disponibles localement après téléchargement.
+- Le paquet YARA Forge Full est la source principale de règles actualisables ; les règles restent disponibles localement après téléchargement.
 - ClamAV reste indisponible dans l'application. Son portage Android, ses dépendances, le pont JNI, les bases de signatures et les essais ARMv7 restent des travaux séparés.
 - Les résultats de scan doivent continuer à afficher séparément SHA-256, libyara/YARA Forge, réputation URLhaus et disponibilité ClamAV.
 
