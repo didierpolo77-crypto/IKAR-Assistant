@@ -53,7 +53,7 @@ export LIBS="-lcrypto -ldl -lm"
   --prefix="${PREFIX}" \
   --disable-shared \
   --enable-static \
-  --without-crypto
+  --with-crypto
 
 make -j2
 make install
