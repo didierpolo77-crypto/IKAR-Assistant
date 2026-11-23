@@ -195,10 +195,17 @@ class YaraForgeUpdateWorker(
                 entryCount++
                 if (entryCount > MAX_ENTRIES) throw java.io.IOException("Trop de fichiers dans l'archive")
                 val rawName = entry.name.replace('\\', '/')
+                if (entry.isDirectory) {
+                    val directoryName = rawName.trimEnd('/')
+                    if (directoryName.startsWith("/") || directoryName.split('/').any { it == ".." || it.isBlank() }) {
+                        throw java.io.IOException("Chemin dangereux dans l'archive")
+                    }
+                    zip.closeEntry()
+                    continue
+                }
                 if (rawName.startsWith("/") || rawName.split('/').any { it == ".." || it.isBlank() }) {
                     throw java.io.IOException("Chemin dangereux dans l'archive")
                 }
-                if (entry.isDirectory) { zip.closeEntry(); continue }
                 val extension = rawName.substringAfterLast('.', "").lowercase(Locale.ROOT)
                 val accepted = extension in setOf("yar", "yara", "inc", "txt", "md", "json", "yml", "yaml", "license", "licence", "toml")
                 if (!accepted) { zip.closeEntry(); continue }
