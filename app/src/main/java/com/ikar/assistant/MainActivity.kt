@@ -1280,7 +1280,7 @@ private fun IkarHome(
                         value = apiToken,
                         onValueChange = { apiToken = it },
                         modifier = Modifier.fillMaxWidth(),
-                        label = { Text("Jeton d'accès Render (IKAR_API_TOKEN)") },
+                        label = { Text("Jeton d'accès IKAR (IKAR_API_TOKEN)") },
                         visualTransformation = PasswordVisualTransformation(),
                         singleLine = true,
                         enabled = !sendingMessage && !testingInference
@@ -1318,7 +1318,7 @@ private fun IkarHome(
                         onClick = {
                             if (!testingInference) {
                                 if (apiToken.isBlank()) {
-                                    inferenceTestStatus = "Saisis d'abord le jeton d'accès Render."
+                                    inferenceTestStatus = "Saisis d'abord le jeton d'accès IKAR."
                                 } else {
                                     testingInference = true
                                     inferenceTestStatus = null
@@ -1448,7 +1448,7 @@ private fun IkarHome(
                 ) {
                     Text(if (sendingMessage) "IKAR réfléchit…" else "Envoyer")
                 }
-                Text(if (connectedMode) "Mode connecté : les messages partent vers Hugging Face via le serveur Render. Une connexion Internet est nécessaire." else "Mode hors connexion : moteur local simple et mémoire du téléphone.", style = MaterialTheme.typography.labelSmall)
+                Text(if (connectedMode) "Mode connecté : les messages sont envoyés au serveur IKAR hébergé sur Vercel. Une connexion Internet est nécessaire." else "Mode hors connexion : moteur local simple et mémoire du téléphone.", style = MaterialTheme.typography.labelSmall)
             }
         }
 
