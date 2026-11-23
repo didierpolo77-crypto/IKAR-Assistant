@@ -8,6 +8,7 @@
 #include <dirent.h>
 #include <sys/stat.h>
 #include <cstring>
+#include <cctype>
 
 #include <yara/error.h>
 #include <yara/libyara.h>
