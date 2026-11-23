@@ -44,6 +44,7 @@ fun SystemAccessCenter() {
     val notificationPrefs = remember { context.getSharedPreferences("ikar_notification_privacy", Context.MODE_PRIVATE) }
     var seenCount by remember { mutableStateOf(notificationPrefs.getInt("notifications_seen", 0)) }
     var sensitiveCount by remember { mutableStateOf(notificationPrefs.getInt("sensitive_count", 0)) }
+    var removedCount by remember { mutableStateOf(notificationPrefs.getInt("notifications_removed", 0)) }
 
     fun refreshAccessState() {
         microphone = ContextCompat.checkSelfPermission(
@@ -58,6 +59,7 @@ fun SystemAccessCenter() {
         listenerEnabled = NotificationManagerCompat.getEnabledListenerPackages(context).contains(context.packageName)
         seenCount = notificationPrefs.getInt("notifications_seen", 0)
         sensitiveCount = notificationPrefs.getInt("sensitive_count", 0)
+        removedCount = notificationPrefs.getInt("notifications_removed", 0)
     }
     androidx.compose.runtime.LaunchedEffect(Unit) { refreshAccessState() }
 
@@ -88,10 +90,10 @@ fun SystemAccessCenter() {
             AccessLine("Fichiers personnels", "Accès sur sélection", "IKAR ne parcourt que les fichiers et dossiers que tu lui désignes avec le sélecteur Android.")
             AccessLine("Liste des applications", "Visibilité déclarée", "Permet l'audit des applications installées et de leurs informations publiques.")
             AccessLine("Accessibilité et contenu des autres applications", "Non activé", "Aucun service d'accessibilité IKAR n'est installé pour lire ou contrôler les écrans d'autres applications.")
-            AccessLine("Notifications des autres applications", if (listenerEnabled) "Autorisé" else "À autoriser", "Analyse locale des alertes reçues. Le texte brut n’est ni enregistré ni envoyé au serveur.")
-            AccessLine("Analyse locale", "$seenCount notifications observées · $sensitiveCount sensibles", "Les codes de vérification et alertes financières sont classés sans conserver leur contenu.")
+            AccessLine("Notifications de toutes les applications", if (listenerEnabled) "Surveillance activée" else "À autoriser", "IKAR signale chaque notification reçue ou actualisée, ainsi que chaque notification retirée, après activation de l’accès Android.")
+            AccessLine("Événements observés", "$seenCount reçues · $removedCount retirées · $sensitiveCount sensibles", "Le texte des notifications est analysé en mémoire puis abandonné. Les alertes IKAR affichent l’application, pas le contenu privé.")
             AccessLine("Données privées des applications", "Inaccessibles", "Android isole les données internes, mots de passe et conversations des autres applications.")
-            Text("Confidentialité notifications : IKAR examine le texte uniquement en mémoire pour classer l’alerte. Le contenu, les codes et les aperçus ne sont pas stockés, exportés ou envoyés à l’IA.", style = MaterialTheme.typography.bodySmall)
+            Text("Confidentialité notifications : IKAR examine le texte uniquement en mémoire pour classer l’alerte. Le contenu, les codes et les aperçus ne sont pas stockés, exportés ou envoyés à l’IA. Android peut toutefois limiter la surveillance si l’accès est révoqué ou si le système arrête le service.", style = MaterialTheme.typography.bodySmall)
 
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(
