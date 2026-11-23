@@ -895,10 +895,27 @@ private fun IkarHome(
                             val normalized = if (raw.startsWith("http://", true) || raw.startsWith("https://", true)) raw else "https://" + raw
                             val local = SecurityCenter.checkLink(normalized)
                             val feedMatch = ThreatIntelStore.isKnownMalicious(context, normalized)
-                            webLocalAssessment = if (feedMatch) local.copy(
+                            val assessment = if (feedMatch) local.copy(
                                 suspicious = true,
                                 reasons = local.reasons + "Correspondance avec un indicateur URLhaus présent dans la base locale."
                             ) else local
+                            webLocalAssessment = assessment
+                            if (speakReplies && assessment.suspicious) {
+                                onSpeak("Attention. IKAR a relevé des signaux suspects dans ce lien. " + assessment.reasons.take(2).joinToString(". "))
+                            }
+                            scope.launch {
+                                withContext(Dispatchers.IO) {
+                                    memoryDao.insert(
+                                        MemoryEntry(
+                                            type = "SECURITY_EVENT",
+                                            content = "Vérification Web locale : " +
+                                                (runCatching { java.net.URI(assessment.url).host }.getOrNull() ?: "hôte non reconnu") +
+                                                " — " + if (assessment.suspicious) assessment.reasons.joinToString() else "aucun signal heuristique détecté"
+                                        )
+                                    )
+                                }
+                                refreshMemories()
+                            }
                         },
                         enabled = linkInput.isNotBlank(),
                         modifier = Modifier.fillMaxWidth()
