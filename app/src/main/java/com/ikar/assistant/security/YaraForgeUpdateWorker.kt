@@ -220,7 +220,7 @@ class YaraForgeUpdateWorker(
                         if (count < 0) break
                         fileBytes += count
                         expandedBytes += count
-                        if (expandedBytes > MAX_EXPANDED_BYTES || fileBytes > 4L * 1024L * 1024L) {
+                        if (expandedBytes > MAX_EXPANDED_BYTES || fileBytes > 32L * 1024L * 1024L) {
                             throw java.io.IOException("Archive YARA Forge décompressée trop volumineuse")
                         }
                         output.write(buffer, 0, count)
