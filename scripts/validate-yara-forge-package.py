@@ -66,10 +66,11 @@ with tempfile.TemporaryDirectory(prefix="ikar-yara-forge-") as temporary:
             if entry.is_dir():
                 continue
             suffix = path.suffix.lower()
+            is_license_file = path.name.upper() in {"LICENSE", "COPYING", "NOTICE", "AUTHORS"}
             if suffix not in {
                 ".yar", ".yara", ".inc", ".txt", ".md", ".json",
                 ".yml", ".yaml", ".license", ".licence", ".toml"
-            }:
+            } and not is_license_file:
                 continue
             if entry.file_size > 32 * 1024 * 1024:
                 raise SystemExit(f"YARA Forge entry exceeds 32 MiB: {name}")
