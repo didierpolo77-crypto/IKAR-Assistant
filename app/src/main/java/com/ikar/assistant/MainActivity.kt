@@ -128,6 +128,8 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         com.ikar.assistant.security.NativeYaraEngine.initialize()
+        com.ikar.assistant.security.YaraForgeRulesScheduler.enable(this)
+        com.ikar.assistant.security.YaraForgeRulesScheduler.updateNow(this)
         createNotificationChannel()
         if (SecurityCenter.isEmergency(this)) {
             window.setFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE, android.view.WindowManager.LayoutParams.FLAG_SECURE)
