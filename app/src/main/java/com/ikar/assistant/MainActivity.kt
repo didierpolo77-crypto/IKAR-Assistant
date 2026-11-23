@@ -133,6 +133,8 @@ class MainActivity : ComponentActivity() {
         com.ikar.assistant.security.NativeYaraEngine.initialize()
         com.ikar.assistant.security.YaraForgeRulesScheduler.enable(this)
         com.ikar.assistant.security.YaraForgeRulesScheduler.updateNow(this)
+        MalwareBazaarSyncScheduler.enable(this)
+        if (MalwareBazaarStore.hasAuthKey(this)) MalwareBazaarSyncScheduler.updateNow(this)
         createNotificationChannel()
         if (SecurityCenter.isEmergency(this)) {
             window.setFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE, android.view.WindowManager.LayoutParams.FLAG_SECURE)
@@ -1243,14 +1245,25 @@ private fun IkarHome(
                     try {
                         MalwareBazaarStore.saveAuthKey(context, malwareBazaarApiKey)
                         malwareBazaarApiKey = ""
-                        malwareBazaarStatus = "Clé MalwareBazaar enregistrée et chiffrée dans Android Keystore. Elle sera utilisée lors des prochaines analyses."
+                        MalwareBazaarSyncScheduler.enable(context)
+                        MalwareBazaarSyncScheduler.updateNow(context)
+                        malwareBazaarStatus = "Clé enregistrée et chiffrée. Synchronisation incrémentale demandée."
                     } catch (error: Exception) {
                         malwareBazaarStatus = "Impossible d'enregistrer la clé : ${error.localizedMessage ?: "vérifie la clé"}"
                     }
                 }, enabled = malwareBazaarApiKey.length >= 16, modifier = Modifier.fillMaxWidth()) {
                     Text("Enregistrer la clé MalwareBazaar")
                 }
+                Button(onClick = {
+                    MalwareBazaarSyncScheduler.updateNow(context)
+                    malwareBazaarStatus = "Synchronisation MalwareBazaar demandée ; elle s'exécute en arrière-plan lorsque le réseau est disponible."
+                }, enabled = MalwareBazaarStore.hasAuthKey(context), modifier = Modifier.fillMaxWidth()) {
+                    Text("Synchroniser la base virale maintenant")
+                }
                 Text(malwareBazaarStatus, style = MaterialTheme.typography.bodySmall)
+                Text("Base locale : ${MalwareBazaarIntelStore.count(context)} empreintes SHA-256 · Dernière synchronisation : ${MalwareBazaarIntelStore.lastSuccessfulSync(context).takeIf { it > 0 }?.let { java.text.DateFormat.getDateTimeInstance().format(java.util.Date(it)) } ?: "jamais"}", style = MaterialTheme.typography.bodySmall)
+                Text(MalwareBazaarIntelStore.status(context), style = MaterialTheme.typography.bodySmall)
+                Text("Synchronisation automatique toutes les 6 heures avec reprise sur une fenêtre glissante de 7 jours. Les doublons SHA-256 sont fusionnés ; aucun échantillon malveillant n'est téléchargé. Les données synchronisées restent utilisables hors connexion.", style = MaterialTheme.typography.bodySmall)
                 Text("Les informations déjà mises en cache restent consultables hors connexion. Sans Auth-Key, l'identification en ligne n'est pas disponible.", style = MaterialTheme.typography.bodySmall)
                 Divider()
                 Text("Protection Web", style = MaterialTheme.typography.titleMedium)
