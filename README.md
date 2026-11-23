@@ -59,18 +59,18 @@ Cette vue décrit honnêtement l'état des fonctions. Elle ne signifie pas que l
 - Le workflow Android s'exécute également sur les pull requests vers `main` afin de vérifier les changements avant intégration.
 
 
-## Antivirus local — état de développement (0.69.0)
+## Antivirus local — libyara et YARA Forge (0.69.0)
 
-- L'analyse de fichiers conserve le calcul SHA-256 et la comparaison avec les empreintes URLhaus déjà téléchargées.
-- Un évaluateur local de règles YARA compatibles est ajouté pour un sous-ensemble documenté : chaînes ASCII littérales et conditions « any of them », « all of them » ou « N of them ». Les règles de démarrage sont heuristiques et peuvent produire des faux positifs. Ce composant n'est pas la bibliothèque officielle libyara.
-- Les fichiers de 16 Mo ou moins sont évalués par ces règles ; les fichiers plus volumineux sont analysés par les autres contrôles disponibles, sans chargement intégral pour éviter une forte consommation mémoire.
-- La quarantaine crée une copie chiffrée AES-GCM dans le stockage privé d'IKAR. Le fichier source n'est jamais supprimé automatiquement. La restauration crée un nouveau fichier dans un dossier choisi par l'utilisateur.
-- L'historique local conserve jusqu'à 200 métadonnées d'analyse (nom, SHA-256, verdict, moteurs déclarés et date), sans contenu de fichier.
-- La base URLhaus existante peut actualiser les URLs actives et les empreintes SHA-256 avec une Auth-Key fournie par l'utilisateur. Cette base ne représente pas toutes les familles de malwares.
-- ClamAV n'est pas encore embarqué dans l'APK. L'application affiche explicitement son indisponibilité et n'exécute aucune fausse analyse ClamAV. L'intégration native ARMv7, ses dépendances, son pont JNI et les bases de signatures doivent être construits et testés séparément avant activation.
+- Le moteur officiel libyara 4.5.0 est compilé pour Android ARMv7 via NDK/JNI et embarqué dans l'APK sous `lib/armeabi-v7a/libikar_yara.so`. Le workflow contrôle explicitement sa présence et son architecture ELF.
+- Le scanner natif charge le dossier de règles local et met en cache les règles compilées jusqu'à la prochaine génération de base. La limite d'analyse YARA de 16 MiB et le délai natif de 20 secondes sont conservés pour les appareils ARM32.
+- IKAR utilise le paquet **Core de YARA Forge**. L'application vérifie le digest SHA-256 et la taille de l'archive, extrait les règles dans un dossier temporaire, puis les compile avec libyara avant activation.
+- Une mise à jour est planifiée au démarrage et toutes les 24 heures si le réseau est disponible. Un bouton permet également de demander une actualisation manuelle depuis le module Antivirus local.
+- La dernière base validée reste stockée dans le répertoire privé de l'application et fonctionne hors connexion. Une mise à jour invalide ne doit pas remplacer la base active.
+- Le moteur Kotlin limité reste un secours explicite si la bibliothèque native ne se charge pas ; il ne doit jamais être présenté comme libyara officiel.
+- Les règles YARA Forge conservent les licences et attributions de leurs auteurs amont. YARA détecte des motifs définis par les règles et ne garantit pas la détection de tous les malwares.
+- L'analyse de fichiers conserve SHA-256, URLhaus, quarantaine AES-GCM et historique. ClamAV natif n'est pas embarqué et aucune analyse ClamAV n'est simulée.
 
-Les résultats « aucun indicateur détecté » ne constituent pas une garantie d'innocuité. Les analyses restent limitées aux fichiers que l'utilisateur peut explicitement ouvrir via le sélecteur Android.
-
+Les résultats « aucun indicateur détecté » ne constituent pas une garantie d'innocuité. Android sans root ne permet pas à IKAR d'inspecter toutes les données privées des autres applications. Le détail du flux de mise à jour est dans [docs/YARA_FORGE_RULES.md](docs/YARA_FORGE_RULES.md).
 
 ## Version 0.69.0 — mémorisation facultative du jeton
 
@@ -80,13 +80,12 @@ Les résultats « aucun indicateur détecté » ne constituent pas une garantie 
 - Le jeton n'est jamais écrit en clair dans les préférences, les journaux ou l'APK. Le transport vers le backend reste en HTTPS.
 
 
-## Étape suivante — moteurs antivirus natifs Android
+## État de l'intégration native Android
 
-- Priorité : intégrer la bibliothèque officielle libyara via Android NDK/JNI, avec compilation reproductible depuis les sources amont et tests de règles sur chaque ABI réellement livrée.
-- Tant que cette intégration native n'est pas compilée et exécutée sur appareil, l'évaluateur de règles intégré reste un sous-ensemble interne et ne doit pas être présenté comme libyara.
-- ClamAV reste indisponible dans l'application. Le projet amont documente le cross-compiling Linux ARM64, mais cela ne constitue pas une prise en charge Android ; une intégration Android exigerait un portage de ses dépendances, un pont JNI, des bases de signatures adaptées et des essais sur appareil.
-- Les résultats de scan doivent continuer à afficher séparément SHA-256, règles locales, réputation URLhaus et disponibilité ClamAV.
-
+- libyara 4.5.0 ARMv7 est intégré au pipeline de compilation APK. La validation finale doit encore inclure la compilation des paquets YARA Forge et un essai d'exécution sur le téléphone physique.
+- Le paquet YARA Forge Core est la source principale de règles actualisables ; les règles restent disponibles localement après téléchargement.
+- ClamAV reste indisponible dans l'application. Son portage Android, ses dépendances, le pont JNI, les bases de signatures et les essais ARMv7 restent des travaux séparés.
+- Les résultats de scan doivent continuer à afficher séparément SHA-256, libyara/YARA Forge, réputation URLhaus et disponibilité ClamAV.
 
 ## Évaluation des moteurs antivirus alternatifs (23 novembre 2026)
 
