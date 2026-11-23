@@ -118,6 +118,13 @@ class YaraForgeUpdateWorker(
                 return fail("Le paquet YARA Forge ne contient aucune règle exploitable.")
             }
 
+            // Keep IKAR's own starter detections alongside the downloaded community rules.
+            var localRules = File(staging, "ikar-local-rules.yar")
+            if (localRules.exists()) localRules = File(staging, "ikar-local-rules-internal.yar")
+            applicationContext.assets.open("ikar-yara/local-rules.yar").use { input ->
+                FileOutputStream(localRules).use { output -> input.copyTo(output) }
+            }
+
             val validation = NativeYaraEngine.validateRulesDirectory(staging)
             if (!validation.startsWith("OK:")) {
                 staging.deleteRecursively()
