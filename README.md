@@ -64,7 +64,7 @@ Cette vue décrit honnêtement l'état des fonctions. Elle ne signifie pas que l
 - Passage à la bibliothèque officielle libyara 4.5.0 via JNI pour ARMv7, liée à OpenSSL 3.5.9 LTS statique pour les modules PE et hash.
 - Ajout du téléchargement, de la validation et du stockage hors ligne du paquet YARA Forge Core.
 - Ajout de la mise à jour automatique quotidienne et du bouton d'actualisation manuelle.
-- Le contrôle CI compile le paquet de règles avec la même version YARA et la configuration sans crypto utilisée par le build Android.
+- Le contrôle CI compile le paquet de règles avec la même version YARA et la configuration OpenSSL activée utilisée par le build Android.
 - Le test d'exécution sur le téléphone physique reste une étape distincte après livraison de l'APK.
 
 ## Antivirus local — libyara et YARA Forge (0.69.0)
