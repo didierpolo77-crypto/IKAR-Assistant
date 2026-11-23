@@ -14,7 +14,7 @@ class BackendHealthTest {
             providerTokenConfigured = true
         ).summary()
 
-        assertTrue(summary.contains("Serveur Render accessible"))
+        assertTrue(summary.contains("Serveur IKAR Vercel accessible"))
         assertTrue(summary.contains("jeton IKAR présent"))
         assertTrue(summary.contains("jeton fournisseur présent"))
         assertFalse(summary.contains("Bearer"))

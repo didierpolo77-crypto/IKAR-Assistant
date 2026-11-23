@@ -20,7 +20,8 @@ data class FileScanReport(
     val certificateSha256: String? = null,
     val indicators: List<String>,
     val verdict: String,
-    val updateAssessment: String? = null
+    val updateAssessment: String? = null,
+    val malwareBazaar: MalwareBazaarReport? = null
 )
 
 /**
@@ -84,6 +85,31 @@ object FileScanner {
             if (apkByName && !isZip) indicators += "Extension APK mais signature ZIP absente : fichier à vérifier."
             if (total == 0L) indicators += "Fichier vide."
 
+            // Prefer official native libyara when packaged. Keep the Kotlin subset as an
+            // explicit fallback until the native engine has passed runtime checks on-device.
+            val yaraWasRun = temp.length() <= 16L * 1024L * 1024L
+            val nativeYara = if (yaraWasRun) NativeYaraEngine.scan(context, temp)
+                else NativeYaraEngine.ScanResult(false, error = "Fichier supérieur à 16 Mo : limite de sécurité ARM32.")
+            val usingOfficialYara = nativeYara.available
+            val yaraMatches = when {
+                usingOfficialYara -> nativeYara.matches.map {
+                    LocalYaraRuleEngine.Match(it, "déclenchée par libyara 4.5.0 natif.")
+                }
+                yaraWasRun -> LocalYaraRuleEngine.scan(context, temp)
+                else -> emptyList()
+            }
+            yaraMatches.forEach { match ->
+                indicators += "Règle YARA locale ${match.rule} : ${match.detail}"
+            }
+            // Enrich local YARA/hash results with MalwareBazaar metadata. Only hashes and rule names leave the device.
+            val malwareBazaar = MalwareBazaarClient.enrich(context, hash, yaraMatches.map { it.rule })
+            if (malwareBazaar?.exactHashMatch == true) {
+                indicators += "Empreinte SHA-256 confirmée dans MalwareBazaar${malwareBazaar.family?.let { " : famille $it" } ?: ""}."
+            } else if (malwareBazaar?.relatedRuleFamilies?.isNotEmpty() == true) {
+                indicators += "Familles associées aux règles YARA (références MalwareBazaar, pas identification exacte) : ${malwareBazaar.relatedRuleFamilies.values.flatten().distinct().joinToString(", ")}."
+            }
+            val clamAvStatus = ClamAvEngineStatus.inspect(context)
+
             var packageName: String? = null
             var apkVersionName: String? = null
             var apkVersionCode: Long? = null
@@ -138,10 +164,24 @@ object FileScanner {
             val verdict = when {
                 indicators.any { it.contains("signature ZIP absente") || it.contains("n'a pas pu lire") || it.contains("pas été reconnu") } ->
                     "Fichier invalide ou non vérifiable"
+                malwareBazaar?.exactHashMatch == true -> "Malware identifié par empreinte SHA-256 — ${malwareBazaar.family ?: "famille non renseignée"}"
+                yaraMatches.isNotEmpty() -> "Règle YARA locale déclenchée — vérification recommandée"
                 knownPayloadIndicator -> "Correspondance avec un indicateur URLhaus — vérification recommandée"
                 indicators.isNotEmpty() -> "Vérification recommandée"
-                else -> "Aucun indicateur suspect détecté par les règles locales"
+                else -> "Aucun indicateur détecté par les règles locales disponibles"
             }
+            val engines = buildList {
+                add("SHA-256")
+                add(when {
+                    usingOfficialYara -> "libyara 4.5.0 officiel ARMv7 exécuté (${yaraMatches.size} règle(s) déclenchée(s))"
+                    yaraWasRun -> "Moteur Kotlin YARA-compatible (sous-ensemble) exécuté (${yaraMatches.size} règle(s)); libyara indisponible : ${nativeYara.error ?: "raison inconnue"}"
+                    else -> "Moteur YARA non exécuté : ${nativeYara.error ?: "limite de sécurité ARM32"}"
+                })
+                add("URLhaus SHA-256 (${if (ThreatIntelStore.hashCount(context) > 0) "base présente" else "base absente"})")
+                add("ClamAV : ${clamAvStatus.detail}")
+                add("Base YARA Forge : ${YaraForgeRulesStatus.status(context)}")
+            }
+            AntivirusScanHistory.record(context, name, hash, verdict, engines)
             val updateAssessment = if (isApk && packageName != null) {
                 assessUpdateCompatibility(context, temp.absolutePath, packageName)
             } else null
@@ -159,7 +199,8 @@ object FileScanner {
                 certificateSha256 = if (isApk) certificateSha256 else null,
                 indicators = indicators,
                 verdict = verdict,
-                updateAssessment = updateAssessment
+                updateAssessment = updateAssessment,
+                malwareBazaar = malwareBazaar
             )
         } finally {
             temp.delete()

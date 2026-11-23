@@ -1,0 +1,42 @@
+# YARA Forge rules in IKAR
+
+## Source and package
+
+IKAR uses the **Full** package published by [YARA Forge](https://github.com/YARAHQ/yara-forge/releases). IKAR now selects the Full package to maximize rule coverage. This is heavier than Core and may increase compilation time, RAM usage, scan latency, and false positives on 32-bit Android. The selected package is downloaded from the latest GitHub Release asset named `yara-forge-rules-full.zip`.
+
+YARA Forge curates and standardizes rules from vetted upstream repositories. Rule-level licenses and attribution remain those declared by the original rule sources; IKAR does not relicense those rules. The update process retains supported license and metadata sidecar files from the package alongside the rules.
+
+## Update behavior
+
+- A one-time update is queued when IKAR starts.
+- A periodic WorkManager job checks for new releases every 24 hours when a network is available.
+- The Antivirus local files card also exposes **Actualiser la base YARA Forge**.
+- IKAR reads the latest release metadata over HTTPS, selects only the official Full asset, checks the declared archive size and SHA-256 digest, and rejects unexpected URLs.
+- The ZIP extractor rejects path traversal, oversized entries, excessive file counts, and expanded archives larger than 128 MiB.
+- Only YARA rule files and documentation/license metadata are extracted.
+- The candidate rule directory is compiled with the bundled official libyara JNI engine linked with static OpenSSL 3.5.9 for the PE and hash modules before it can replace the active database. IKAR's own bundled starter rules are retained in a separate namespace alongside the YARA Forge community rules.
+- Activation uses a staging directory and a previous-directory rollback. An invalid or incomplete update must not replace the last working rules.
+- The active rules remain in app-private storage and can be used offline after download.
+
+## Scanner behavior
+
+- Official libyara 4.5.0 ARMv7 is the primary scanner when its JNI library loads.
+- The native engine compiles the active rule directory once per rules generation and reuses the compiled rules for subsequent file scans.
+- If libyara is unavailable, the app explicitly reports that it is using the limited Kotlin YARA-compatible fallback; it does not label that fallback as official YARA.
+- File scanning remains read-only. A YARA match is an indicator that requires review, not proof by itself that a file is malicious.
+- The existing 16 MiB YARA file-scan limit and 20-second native scan timeout remain in place for ARM32 safety.
+- The app does not inspect all private files of other apps on non-rooted Android devices.
+
+## Important limitations
+
+YARA is a rule-matching engine, not a complete antivirus database or a guarantee that every malware family will be detected. Full package updates need an Internet connection; the last successfully installed rule set remains available offline. YARA rules complement, but do not replace, SHA-256 threat-intelligence feeds or a separately integrated antivirus engine. **ClamAV is not bundled or claimed to run in IKAR.**
+
+## CI validation
+
+The Android workflow downloads the current Full package, verifies its SHA-256 digest and size, and compiles the extracted rule files with YARA 4.5.0 built with the OpenSSL-enabled configuration matching the Android build. The APK workflow separately verifies that `lib/armeabi-v7a/libikar_yara.so` is present and is an ARM library.
+
+A successful CI build validates packaging and compilation. Runtime execution on the user's physical Android device is still required before claiming device-level runtime validation.
+
+## ARM32 performance note
+
+The Full package contains substantially more rules than Core. On ARMv7 devices, initial compilation can be slower and consume more memory. IKAR keeps the existing per-file scan size and timeout safeguards. If the device runs out of memory or scans become unstable, use the Core package profile rather than repeatedly retrying Full. The Full package improves breadth, not guaranteed detection; it may also produce more false positives.
