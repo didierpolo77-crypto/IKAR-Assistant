@@ -13,8 +13,8 @@ android {
         applicationId = "com.ikar.assistant"
         minSdk = 23
         targetSdk = 34
-        versionCode = 69
-        versionName = "0.69.0"
+        versionCode = 70
+        versionName = "0.70.0"
         ndk { abiFilters += "armeabi-v7a" }
     }
 
