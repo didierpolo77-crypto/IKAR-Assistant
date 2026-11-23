@@ -232,7 +232,7 @@ object WebResearch {
                     }
                     output.write(buffer, 0, count)
                 }
-                output.toString(Charsets.UTF_8.name())
+                String(output.toByteArray(), Charsets.UTF_8)
             }.orEmpty()
             if (body.isBlank()) throw IllegalStateException("Réponse vide")
             return body
