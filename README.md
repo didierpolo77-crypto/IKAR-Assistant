@@ -98,3 +98,8 @@ Autres candidats examinés :
 - **anti-android-virus (aav)** : moteur C++17 Android orienté analyse statique DEX/APK, sous MIT, mais son dépôt se décrit comme recherche/éducation et sa base fournie ne contient que des signatures synthétiques ; il ne remplace pas un moteur antivirus généraliste.
 
 Décision : ne pas remplacer aveuglément YARA/ClamAV par une bibliothèque non vérifiée. Priorité à un prototype isolé HydraDragonAV Mobile sur ARMv7, sans toucher au moteur actuel ; si ce candidat échoue à la compilation, à l'audit ou aux tests, garder une architecture IKAR modulaire et comparer une intégration sous licence Avira MAVAPI. Toute solution de repli doit disposer de vraies signatures actualisables hors ligne, d'une analyse de fichiers/APK, de tests EICAR et de fichiers de test bénins, et d'un rapport séparant détection, suspicion et absence de moteur.
+
+
+## Catalogue des moteurs antivirus
+
+Le comparatif détaillé des moteurs envisageables, de leurs licences, de leurs limites ARM32 Android et du plan d'intégration est maintenu dans [docs/ANTIVIRUS_ENGINE_CATALOG.md](docs/ANTIVIRUS_ENGINE_CATALOG.md). Le principe reste de ne déclarer un moteur actif qu'après compilation pour l'ABI cible et test réel d'initialisation et de détection sur appareil.
