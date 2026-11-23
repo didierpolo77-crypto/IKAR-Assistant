@@ -71,8 +71,8 @@ with tempfile.TemporaryDirectory(prefix="ikar-yara-forge-") as temporary:
                 ".yml", ".yaml", ".license", ".licence", ".toml"
             }:
                 continue
-            if entry.file_size > 4 * 1024 * 1024:
-                raise SystemExit(f"Oversized YARA Forge entry: {name}")
+            if entry.file_size > 32 * 1024 * 1024:
+                raise SystemExit(f"YARA Forge entry exceeds 32 MiB: {name}")
             expanded += entry.file_size
             if expanded > 40 * 1024 * 1024:
                 raise SystemExit("YARA Forge expanded archive exceeds 40 MiB")
