@@ -25,7 +25,13 @@ int yara_callback(YR_SCAN_CONTEXT*, int message, void* message_data, void* user_
     if (message == CALLBACK_MSG_RULE_MATCHING && message_data != nullptr && user_data != nullptr) {
         const auto* rule = static_cast<const YR_RULE*>(message_data);
         auto* matches = static_cast<MatchList*>(user_data);
-        if (rule->identifier != nullptr) matches->names.emplace_back(rule->identifier);
+        if (rule->identifier != nullptr) {
+            try {
+                matches->names.emplace_back(rule->identifier);
+            } catch (...) {
+                return CALLBACK_ERROR;
+            }
+        }
     }
     return CALLBACK_CONTINUE;
 }
