@@ -40,4 +40,4 @@ The IKAR JNI bridge is original integration code and is not part of the upstream
 
 ## OpenSSL
 
-- OpenSSL 3.5.9, compiled as a static Android ARMv7 dependency for libyara. Licensed under Apache License 2.0. Source: https://github.com/openssl/openssl/releases/tag/openssl-3.5.9
+- OpenSSL 3.5.9, compiled as a static Android ARMv7 dependency for libyara. Licensed under Apache License 2.0. Full text: [LICENSES/OpenSSL-3.5.9-Apache-2.0.txt](LICENSES/OpenSSL-3.5.9-Apache-2.0.txt). Source: https://github.com/openssl/openssl/releases/tag/openssl-3.5.9
