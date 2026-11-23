@@ -2,7 +2,7 @@ name: Build IKAR Assistant Android APK
 
 on:
   push:
-    branches: [ "main", "feature/ikar-complete-refresh-v067" ]
+    branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
   workflow_dispatch:
