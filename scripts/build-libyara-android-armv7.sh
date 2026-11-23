@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Build official libyara for Android armeabi-v7a; CI uses the current Android command-line tools.
 set -euo pipefail
 
 YARA_TAG="${YARA_TAG:-v4.5.0}"
