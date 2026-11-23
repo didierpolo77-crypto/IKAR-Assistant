@@ -59,7 +59,7 @@ Cette vue décrit honnêtement l'état des fonctions. Elle ne signifie pas que l
 - Le workflow Android s'exécute également sur les pull requests vers `main` afin de vérifier les changements avant intégration.
 
 
-## Antivirus local — étape de développement (0.68.0 en préparation)
+## Antivirus local — état de développement (0.69.0)
 
 - L'analyse de fichiers conserve le calcul SHA-256 et la comparaison avec les empreintes URLhaus déjà téléchargées.
 - Un évaluateur local de règles YARA compatibles est ajouté pour un sous-ensemble documenté : chaînes ASCII littérales et conditions « any of them », « all of them » ou « N of them ». Les règles de démarrage sont heuristiques et peuvent produire des faux positifs. Ce composant n'est pas la bibliothèque officielle libyara.
@@ -78,3 +78,11 @@ Les résultats « aucun indicateur détecté » ne constituent pas une garantie 
 - Si l'utilisateur active cette option, le jeton est chiffré en AES-GCM avec une clé conservée dans Android Keystore.
 - Désactiver l'option efface la valeur chiffrée et la clé locale.
 - Le jeton n'est jamais écrit en clair dans les préférences, les journaux ou l'APK. Le transport vers le backend reste en HTTPS.
+
+
+## Étape suivante — moteurs antivirus natifs Android
+
+- Priorité : intégrer la bibliothèque officielle libyara via Android NDK/JNI, avec compilation reproductible depuis les sources amont et tests de règles sur chaque ABI réellement livrée.
+- Tant que cette intégration native n'est pas compilée et exécutée sur appareil, l'évaluateur de règles intégré reste un sous-ensemble interne et ne doit pas être présenté comme libyara.
+- ClamAV reste indisponible dans l'application. Le projet amont documente le cross-compiling Linux ARM64, mais cela ne constitue pas une prise en charge Android ; une intégration Android exigerait un portage de ses dépendances, un pont JNI, des bases de signatures adaptées et des essais sur appareil.
+- Les résultats de scan doivent continuer à afficher séparément SHA-256, règles locales, réputation URLhaus et disponibilité ClamAV.
