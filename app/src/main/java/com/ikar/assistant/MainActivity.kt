@@ -647,7 +647,6 @@ private fun IkarHome(
                     openTasks = productivityItems.count { it.content.startsWith("OPEN|") },
                     onOpenAssistant = {
                         selectedNavigation = "Assistant"
-                        scope.launch { assistantRequester.bringIntoView() }
                     },
                     onOpenSearch = {
                         selectedNavigation = "Assistant"
@@ -655,25 +654,22 @@ private fun IkarHome(
                     },
                     onOpenSecurity = {
                         selectedNavigation = "Sécurité"
-                        scope.launch { securityRequester.bringIntoView() }
                     },
                     onOpenProductivity = {
                         selectedNavigation = "Outils"
-                        scope.launch { toolsRequester.bringIntoView() }
                     },
                     onOpenWeb = {
                         selectedNavigation = "Sécurité"
-                        scope.launch { dnsFirewallRequester.bringIntoView() }
                     },
                     onOpenDevice = {
                         selectedNavigation = "Sécurité"
-                        scope.launch { deviceRequester.bringIntoView() }
                     }
                 )
                 PendingActionCenter(memoryDao = memoryDao)
             }
         }
 
+        if (selectedNavigation == "Sécurité") {
         Card(Modifier.fillMaxWidth().bringIntoViewRequester(securityRequester)) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Protection anti-espionnage", style = MaterialTheme.typography.titleLarge)
@@ -1044,6 +1040,9 @@ private fun IkarHome(
             }
         }
 
+        }
+
+        if (selectedNavigation == "Assistant") {
         Card(Modifier.fillMaxWidth().bringIntoViewRequester(assistantRequester)) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("Discussion hors connexion", style = MaterialTheme.typography.titleLarge)
@@ -1282,6 +1281,9 @@ private fun IkarHome(
             }
         }
 
+        }
+
+        if (selectedNavigation == "Outils") {
         Card(Modifier.fillMaxWidth().bringIntoViewRequester(toolsRequester)) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Mémoire personnelle hors connexion", style = MaterialTheme.typography.titleMedium)
@@ -1443,6 +1445,8 @@ private fun IkarHome(
             style = MaterialTheme.typography.bodySmall
         )
       }
+        }
+
       NavigationBar(containerColor = Color(0xFF0B110B), contentColor = Color(0xFF78E000)) {
           val destinations = listOf(
               Triple("Accueil", "⌂", homeRequester),
@@ -1455,7 +1459,6 @@ private fun IkarHome(
                   selected = selectedNavigation == label,
                   onClick = {
                       selectedNavigation = label
-                      scope.launch { requester.bringIntoView() }
                   },
                   icon = { Text(symbol, style = MaterialTheme.typography.titleMedium) },
                   label = { Text(label, style = MaterialTheme.typography.labelSmall) },
