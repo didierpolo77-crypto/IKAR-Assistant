@@ -4,6 +4,7 @@
 #include <cstdio>
 #include <pthread.h>
 
+#include <yara/error.h>
 #include <yara/libyara.h>
 #include <yara/compiler.h>
 #include <yara/rules.h>
