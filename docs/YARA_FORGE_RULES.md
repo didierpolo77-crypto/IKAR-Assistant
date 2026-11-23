@@ -14,7 +14,7 @@ YARA Forge curates and standardizes rules from vetted upstream repositories. Rul
 - IKAR reads the latest release metadata over HTTPS, selects only the official Core asset, checks the declared archive size and SHA-256 digest, and rejects unexpected URLs.
 - The ZIP extractor rejects path traversal, oversized entries, excessive file counts, and expanded archives larger than 40 MiB.
 - Only YARA rule files and documentation/license metadata are extracted.
-- The candidate rule directory is compiled with the bundled official libyara JNI engine before it can replace the active database.
+- The candidate rule directory is compiled with the bundled official libyara JNI engine linked with static OpenSSL 3.5.9 for the PE and hash modules before it can replace the active database.
 - Activation uses a staging directory and a previous-directory rollback. An invalid or incomplete update must not replace the last working rules.
 - The active rules remain in app-private storage and can be used offline after download.
 
@@ -33,6 +33,6 @@ YARA is a rule-matching engine, not a complete antivirus database or a guarantee
 
 ## CI validation
 
-The Android workflow downloads the current Core package, verifies its SHA-256 digest and size, and compiles the extracted rule files with YARA 4.5.0 built with the same `--without-crypto` configuration used for Android. The APK workflow separately verifies that `lib/armeabi-v7a/libikar_yara.so` is present and is an ARM library.
+The Android workflow downloads the current Core package, verifies its SHA-256 digest and size, and compiles the extracted rule files with YARA 4.5.0 built with the OpenSSL-enabled configuration matching the Android build. The APK workflow separately verifies that `lib/armeabi-v7a/libikar_yara.so` is present and is an ARM library.
 
 A successful CI build validates packaging and compilation. Runtime execution on the user's physical Android device is still required before claiming device-level runtime validation.
