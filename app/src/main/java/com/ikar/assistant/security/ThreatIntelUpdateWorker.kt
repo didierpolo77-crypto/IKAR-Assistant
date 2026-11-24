@@ -128,21 +128,7 @@ class ThreatIntelUpdateWorker(
             val status = connection.responseCode
             if (status == 401 || status == 403) throw AuthRejected()
             if (status !in 200..299) throw java.io.IOException("HTTP $status")
-            val body = connection.inputStream.use { input ->
-                val output = java.io.ByteArrayOutputStream()
-                val buffer = ByteArray(16 * 1024)
-                var total = 0
-                while (true) {
-                    val count = input.read(buffer)
-                    if (count < 0) break
-                    total += count
-                    if (total > 8_000_000) {
-                        throw java.io.IOException("Réponse URLhaus trop volumineuse (limite 8 Mo).")
-                    }
-                    output.write(buffer, 0, count)
-                }
-                String(output.toByteArray(), Charsets.UTF_8)
-            }
+            val body = BoundedResponseReader.readUtf8(connection.inputStream, 8_000_000, "URLhaus")
             if (body.isBlank()) throw java.io.IOException("Réponse URLhaus vide")
             return JSONObject(body)
         } finally {
