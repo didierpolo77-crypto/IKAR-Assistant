@@ -26,13 +26,16 @@ jlong g_cached_generation = -1;
 
 void initialize_yara_once() { g_yara_init_result = yr_initialize(); }
 
-struct MatchList { std::vector<std::string> names; };
+struct MatchList {
+    std::vector<std::string> names;
+    static constexpr size_t MAX_MATCHED_RULES = 512;
+};
 
 int yara_callback(YR_SCAN_CONTEXT*, int message, void* message_data, void* user_data) {
     if (message == CALLBACK_MSG_RULE_MATCHING && message_data != nullptr && user_data != nullptr) {
         const auto* rule = static_cast<const YR_RULE*>(message_data);
         auto* matches = static_cast<MatchList*>(user_data);
-        if (rule->identifier != nullptr) {
+        if (rule->identifier != nullptr && matches->names.size() < MatchList::MAX_MATCHED_RULES) {
             try { matches->names.emplace_back(rule->identifier); }
             catch (...) { return CALLBACK_ERROR; }
         }
