@@ -177,6 +177,25 @@ object ThreatIntelStore {
             .apply()
     }
 
+    /** Add recent URLhaus payload hashes without deleting previously learned indicators. */
+    fun mergeKnownSha256(context: Context, hashes: Set<String>) {
+        val normalized = hashes.asSequence().map { it.trim().lowercase() }
+            .filter { it.matches(Regex("[a-f0-9]{64}")) }.distinct().toList()
+        if (normalized.isEmpty()) return
+        val db = database(context)
+        db.beginTransaction()
+        try {
+            val now = System.currentTimeMillis()
+            normalized.forEach { putHash(db, it, now) }
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .putInt("hash_count", hashCount(context))
+            .apply()
+    }
+
     fun isKnownSha256(context: Context, sha256: String): Boolean {
         val normalized = sha256.trim().lowercase()
         if (!normalized.matches(Regex("[a-f0-9]{64}"))) return false
