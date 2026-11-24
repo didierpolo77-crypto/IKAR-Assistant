@@ -94,7 +94,7 @@ class ThreatIntelUpdateWorker(
             }
 
             ThreatIntelStore.replaceActiveUrls(applicationContext, activeUrls)
-            ThreatIntelStore.replaceKnownSha256(applicationContext, hashes)
+            ThreatIntelStore.mergeKnownSha256(applicationContext, hashes)
             ThreatIntelStore.setUpdateStatus(
                 applicationContext,
                 "Mise à jour réussie : ${activeUrls.size} URLs actives et ${hashes.size} empreintes SHA-256."
