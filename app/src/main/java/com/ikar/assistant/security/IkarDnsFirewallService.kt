@@ -40,7 +40,8 @@ class IkarDnsFirewallService : VpnService() {
                 .addAddress("10.77.0.1", 32)
                 .addDnsServer("10.77.0.2")
                 .addRoute("10.77.0.2", 32)
-                .allowFamily(android.system.OsConstants.AF_INET)
+                // Keep IPv6 connectivity working; IPv6 DNS is not inspected by this IPv4-only filter.
+                .allowFamily(android.system.OsConstants.AF_INET6)
                 .establish()
         } catch (_: Exception) {
             null
