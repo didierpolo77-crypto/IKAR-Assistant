@@ -105,10 +105,14 @@ object RansomwareRecoveryVault {
             if (!temporary.renameTo(destination)) {
                 throw IllegalStateException("Impossible de finaliser la copie protégée.")
             }
+            // Keep the original display name in app-private metadata so restoration
+            // does not silently turn every recovered document into an opaque .bin file.
+            File(vaultDir(context), "$id.meta").writeText(name, Charsets.UTF_8)
             return Backup(id, name, total, System.currentTimeMillis())
         } catch (error: Exception) {
             temporary.delete()
             destination.delete()
+            File(vaultDir(context), "$id.meta").delete()
             throw error
         }
     }
@@ -132,7 +136,18 @@ object RansomwareRecoveryVault {
             require(input.read(iv) == IV_BYTES) { "En-tête de sauvegarde incomplet." }
             val cipher = Cipher.getInstance(TRANSFORMATION)
             cipher.init(Cipher.DECRYPT_MODE, key(), GCMParameterSpec(TAG_BITS, iv))
-            val outputDoc = folder.createFile("application/octet-stream", "ikar-restored-$backupId.bin")
+            val storedName = File(vaultDir(context), "$backupId.meta")
+                .takeIf { it.isFile }
+                ?.readText(Charsets.UTF_8)
+                ?.trim()
+                ?.takeIf { it.isNotBlank() }
+            val safeName = (storedName ?: "ikar-restored-$backupId.bin")
+                .replace('/', '_')
+                .replace('\\\\', '_')
+                .replace(Regex("[\\\\p{Cntrl}]"), "_")
+                .take(180)
+                .ifBlank { "ikar-restored-$backupId.bin" }
+            val outputDoc = folder.createFile("application/octet-stream", safeName)
                 ?: throw IllegalStateException("Impossible de créer le nouveau fichier restauré.")
             try {
                 context.contentResolver.openOutputStream(outputDoc.uri, "w")?.use { output ->
