@@ -1,6 +1,8 @@
 package com.ikar.assistant.ai
 
 import java.net.URI
+import java.io.InputStream
+import com.ikar.assistant.security.BoundedResponseReader
 import com.ikar.assistant.data.MemoryEntry
 
 import org.json.JSONArray
@@ -71,6 +73,10 @@ object IkarOnlineModelGateway {
     private const val BASE_URL = "https://ikar-cloudflare-worker-v4gl.vercel.app"
     private const val ENDPOINT = "$BASE_URL/v1/chat"
     private const val HEALTH_ENDPOINT = "$BASE_URL/health"
+    private const val MAX_API_RESPONSE_BYTES = 1_048_576
+
+    private fun readBoundedResponse(stream: InputStream?, sourceName: String): String =
+        stream?.use { BoundedResponseReader.readUtf8(it, MAX_API_RESPONSE_BYTES, sourceName) }.orEmpty()
 
     /** Vérifie un domaine ou une adresse IP via AdGuard, URLhaus et ThreatFox côté serveur.
      * Seul l'indicateur demandé est transmis ; aucun fichier du téléphone n'est envoyé.
@@ -111,7 +117,7 @@ object IkarOnlineModelGateway {
             connection.outputStream.use { it.write(payload.toString().toByteArray(Charsets.UTF_8)) }
             val status = connection.responseCode
             val stream = if (status in 200..299) connection.inputStream else connection.errorStream
-            val body = stream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
+            val body = readBoundedResponse(stream, "API de sécurité IKAR")
             if (status !in 200..299) {
                 val error = runCatching { JSONObject(body) }.getOrNull()
                 val detail = error?.optString("message")?.takeIf { it.isNotBlank() }
@@ -141,7 +147,7 @@ object IkarOnlineModelGateway {
         try {
             val statusCode = connection.responseCode
             val stream = if (statusCode in 200..299) connection.inputStream else connection.errorStream
-            val body = stream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
+            val body = readBoundedResponse(stream, "diagnostic serveur IKAR")
             if (statusCode !in 200..299) {
                 throw IllegalStateException("Le serveur Vercel répond HTTP $statusCode.")
             }
@@ -187,7 +193,7 @@ object IkarOnlineModelGateway {
             connection.outputStream.use { it.write(evidence.toString().toByteArray(Charsets.UTF_8)) }
             val status = connection.responseCode
             val stream = if (status in 200..299) connection.inputStream else connection.errorStream
-            val responseText = stream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
+            val responseText = readBoundedResponse(stream, "analyse de sécurité IKAR")
             val response = runCatching { JSONObject(responseText) }.getOrNull()
             if (status !in 200..299) {
                 val reason = when (status) {
@@ -268,7 +274,7 @@ object IkarOnlineModelGateway {
             connection.outputStream.use { it.write(payload.toByteArray(Charsets.UTF_8)) }
             val status = connection.responseCode
             val stream = if (status in 200..299) connection.inputStream else connection.errorStream
-            val responseText = stream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
+            val responseText = readBoundedResponse(stream, "chat IKAR")
             val response = runCatching { JSONObject(responseText) }.getOrNull()
 
             if (status !in 200..299) {
