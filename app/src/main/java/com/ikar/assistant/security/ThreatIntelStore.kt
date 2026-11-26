@@ -9,6 +9,7 @@ import android.security.keystore.KeyProperties
 import android.util.Base64
 import org.json.JSONArray
 import java.net.URI
+import java.net.IDN
 import java.security.KeyStore
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
@@ -209,6 +210,52 @@ object ThreatIntelStore {
         database(context).rawQuery("SELECT COUNT(*) FROM indicators WHERE kind = 'sha256'", null)
             .use { if (it.moveToFirst()) it.getInt(0) else 0 }
 
+    private fun normalizeCustomHost(rawHost: String): String? {
+        val candidate = rawHost.trim().trimEnd('.').lowercase()
+        if (candidate.isBlank() || candidate.contains("://") || candidate.contains('/') ||
+            candidate.contains(':') || candidate.contains('*') || candidate.contains('@')
+        ) return null
+        val ascii = runCatching { IDN.toASCII(candidate, IDN.USE_STD3_ASCII_RULES).lowercase() }.getOrNull()
+            ?: return null
+        if (ascii.length > 253) return null
+        val labels = ascii.split('.')
+        if (labels.any { it.isBlank() || it.length > 63 ||
+                !it.matches(Regex("[a-z0-9](?:[a-z0-9-]*[a-z0-9])?")) }
+        ) return null
+        return ascii
+    }
+
+    /** Add an explicit user block rule; root rules also cover subdomains. */
+    fun addCustomBlockedHost(context: Context, rawHost: String): Boolean {
+        val host = normalizeCustomHost(rawHost) ?: return false
+        val db = database(context)
+        val row = ContentValues().apply {
+            put("indicator", "custom:$host")
+            put("kind", "custom_block")
+            put("host", host)
+            put("is_root", 1)
+            put("updated_at", System.currentTimeMillis())
+        }
+        return db.insertWithOnConflict("indicators", null, row, SQLiteDatabase.CONFLICT_REPLACE) != -1L
+    }
+
+    fun removeCustomBlockedHost(context: Context, rawHost: String): Boolean {
+        val host = normalizeCustomHost(rawHost) ?: return false
+        return database(context).delete(
+            "indicators", "kind = ? AND host = ?", arrayOf("custom_block", host)
+        ) > 0
+    }
+
+    fun customBlockedHosts(context: Context): List<String> {
+        val result = mutableListOf<String>()
+        database(context).rawQuery(
+            "SELECT host FROM indicators WHERE kind = 'custom_block' ORDER BY host ASC", null
+        ).use { cursor ->
+            while (cursor.moveToNext()) result += cursor.getString(0)
+        }
+        return result
+    }
+
     fun isKnownMalicious(context: Context, rawUrl: String): Boolean {
         val uri = runCatching { URI(rawUrl.trim()) }.getOrNull() ?: return false
         val host = uri.host?.lowercase()?.trimEnd('.') ?: return false
@@ -224,7 +271,7 @@ object ThreatIntelStore {
         val host = rawHost.trim().trimEnd('.').lowercase()
         if (host.isBlank()) return false
         return database(context).rawQuery(
-            """SELECT 1 FROM indicators WHERE kind = 'url'
+            """SELECT 1 FROM indicators WHERE kind IN ('url', 'custom_block')
                 AND (host = ? OR (is_root = 1 AND ? LIKE '%.' || host)) LIMIT 1""",
             arrayOf(host, host)
         ).use { it.moveToFirst() }
