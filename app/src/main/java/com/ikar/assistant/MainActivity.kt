@@ -1818,7 +1818,7 @@ private fun IkarBrandHeader() {
             modifier = Modifier.background(Color(0xFF14251B), RoundedCornerShape(12.dp)).padding(horizontal = 11.dp, vertical = 7.dp)
         ) {
             Text("VERSION", style = MaterialTheme.typography.labelSmall, color = Color(0xFF9EB9A5))
-            Text("0.68.0", color = Color(0xFFB7F36B), fontWeight = FontWeight.Bold)
+            Text(BuildConfig.VERSION_NAME, color = Color(0xFFB7F36B), fontWeight = FontWeight.Bold)
         }
     }
 }
