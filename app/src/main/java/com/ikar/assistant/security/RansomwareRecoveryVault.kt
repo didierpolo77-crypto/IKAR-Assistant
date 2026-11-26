@@ -6,6 +6,7 @@ import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import androidx.documentfile.provider.DocumentFile
 import java.io.File
+import java.io.InputStream
 import java.security.KeyStore
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
@@ -39,6 +40,18 @@ object RansomwareRecoveryVault {
 
     private fun vaultDir(context: Context): File =
         File(context.noBackupFilesDir, "ransomware-recovery").apply { mkdirs() }
+
+    /** InputStream.read(byteArray) may return fewer bytes than requested. */
+    private fun readFully(input: InputStream, buffer: ByteArray): Boolean {
+        var offset = 0
+        while (offset < buffer.size) {
+            val count = input.read(buffer, offset, buffer.size - offset)
+            if (count < 0) return false
+            if (count == 0) continue
+            offset += count
+        }
+        return true
+    }
 
     private fun key(): javax.crypto.SecretKey {
         val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
@@ -129,11 +142,11 @@ object RansomwareRecoveryVault {
 
         encryptedFile.inputStream().buffered().use { input ->
             val header = ByteArray(4)
-            require(input.read(header) == 4 && header.contentEquals(byteArrayOf(73, 75, 86, 1))) {
+            require(readFully(input, header) && header.contentEquals(byteArrayOf(73, 75, 86, 1))) {
                 "Format de sauvegarde invalide."
             }
             val iv = ByteArray(IV_BYTES)
-            require(input.read(iv) == IV_BYTES) { "En-tête de sauvegarde incomplet." }
+            require(readFully(input, iv)) { "En-tête de sauvegarde incomplet." }
             val cipher = Cipher.getInstance(TRANSFORMATION)
             cipher.init(Cipher.DECRYPT_MODE, key(), GCMParameterSpec(TAG_BITS, iv))
             val storedName = File(vaultDir(context), "$backupId.meta")
