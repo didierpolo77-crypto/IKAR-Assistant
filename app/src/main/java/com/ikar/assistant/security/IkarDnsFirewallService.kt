@@ -69,7 +69,8 @@ class IkarDnsFirewallService : VpnService() {
         try {
             while (running.get()) {
                 val length = input.read(packet)
-                if (length <= 0) continue
+                if (length < 0) break
+                if (length == 0) continue
                 val response = handleDnsPacket(packet, length) ?: continue
                 output.write(response)
             }
@@ -217,7 +218,8 @@ class IkarDnsFirewallService : VpnService() {
     }
 
     private fun makeNxdomain(query: ByteArray): ByteArray {
-        val response = query.copyOf()
+        // Return only the DNS header and original question; discard EDNS/additional records.
+        val response = query.copyOf(questionEnd(query) ?: 12)
         val flags = u16(response, 2)
         putU16(response, 2, (flags and 0x0100) or 0x8083) // QR, RA, NXDOMAIN; preserve RD
         putU16(response, 6, 0) // ANCOUNT
