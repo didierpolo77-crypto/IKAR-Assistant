@@ -343,6 +343,10 @@ private fun IkarHome(
     var yaraForgeStatus by remember { mutableStateOf(YaraForgeRulesStatus.status(context)) }
     var threatIntelCount by remember { mutableIntStateOf(ThreatIntelStore.indicatorCount(context)) }
     var firewallRunning by remember { mutableStateOf(context.getSharedPreferences("ikar_security_center", android.content.Context.MODE_PRIVATE).getBoolean("dns_firewall_running", false)) }
+    var firewallBlockedCount by remember { mutableStateOf(context.getSharedPreferences("ikar_dns_firewall_stats", android.content.Context.MODE_PRIVATE).getLong("blocked_count", 0L)) }
+    var firewallAllowedCount by remember { mutableStateOf(context.getSharedPreferences("ikar_dns_firewall_stats", android.content.Context.MODE_PRIVATE).getLong("allowed_count", 0L)) }
+    var firewallErrorCount by remember { mutableStateOf(context.getSharedPreferences("ikar_dns_firewall_stats", android.content.Context.MODE_PRIVATE).getLong("error_count", 0L)) }
+    var firewallLastDomain by remember { mutableStateOf(context.getSharedPreferences("ikar_dns_firewall_stats", android.content.Context.MODE_PRIVATE).getString("last_domain", "Aucune") ?: "Aucune") }
     var observedMediaChanges by remember { mutableIntStateOf(SharedStorageBehaviorMonitor.recentChangeCount(context)) }
     var observedInstallCount by remember { mutableIntStateOf(SharedStorageBehaviorMonitor.recentInstallCount(context)) }
     var notificationsSeen by remember { mutableIntStateOf(context.getSharedPreferences("ikar_notification_privacy", android.content.Context.MODE_PRIVATE).getInt("notifications_seen", 0)) }
@@ -502,6 +506,11 @@ private fun IkarHome(
             threatIntelStatus = ThreatIntelStore.updateStatus(context)
             firewallRunning = context.getSharedPreferences("ikar_security_center", android.content.Context.MODE_PRIVATE)
                 .getBoolean("dns_firewall_running", false)
+            val firewallStats = context.getSharedPreferences("ikar_dns_firewall_stats", android.content.Context.MODE_PRIVATE)
+            firewallBlockedCount = firewallStats.getLong("blocked_count", 0L)
+            firewallAllowedCount = firewallStats.getLong("allowed_count", 0L)
+            firewallErrorCount = firewallStats.getLong("error_count", 0L)
+            firewallLastDomain = firewallStats.getString("last_domain", "Aucune") ?: "Aucune"
             kotlinx.coroutines.delay(5000)
         }
     }
@@ -1087,11 +1096,13 @@ private fun IkarHome(
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("4 · Filtrage DNS sur l'appareil", style = MaterialTheme.typography.titleMedium)
-                    Text("Le filtre VPN local bloque uniquement les domaines racines présents dans la base URLhaus téléchargée. Il traite le DNS IPv4/UDP intercepté ; DNS chiffré, IPv6, DNS TCP et connexions directes peuvent le contourner. Ce n'est pas un pare-feu complet.")
+                    Text("Le filtre VPN local bloque les hôtes présents dans la base URLhaus, y compris lorsque l'indicateur contient un chemin. Il intercepte le DNS IPv4/UDP et utilise Quad9 Security puis Cloudflare Malware comme relais de secours. DNS chiffré, IPv6, DNS TCP et connexions directes peuvent encore le contourner : ce n'est pas un pare-feu réseau intégral.")
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                         Column(Modifier.weight(1f)) {
                             Text(if (firewallRunning) "Filtre DNS actif selon l'état du service" else "Filtre DNS désactivé")
                             Text("Indicateurs locaux : " + threatIntelCount, style = MaterialTheme.typography.bodySmall)
+                            Text("Bloquées : " + firewallBlockedCount + " · Résolues : " + firewallAllowedCount + " · Échecs DNS : " + firewallErrorCount, style = MaterialTheme.typography.bodySmall)
+                            Text("Dernier domaine observé : " + firewallLastDomain, style = MaterialTheme.typography.bodySmall)
                         }
                         Switch(
                             checked = firewallRunning,
