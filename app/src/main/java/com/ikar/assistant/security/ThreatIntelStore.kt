@@ -224,8 +224,8 @@ object ThreatIntelStore {
         val host = rawHost.trim().trimEnd('.').lowercase()
         if (host.isBlank()) return false
         return database(context).rawQuery(
-            """SELECT 1 FROM indicators WHERE kind = 'url' AND is_root = 1
-                AND (host = ? OR ? LIKE '%.' || host) LIMIT 1""",
+            """SELECT 1 FROM indicators WHERE kind = 'url'
+                AND (host = ? OR (is_root = 1 AND ? LIKE '%.' || host)) LIMIT 1""",
             arrayOf(host, host)
         ).use { it.moveToFirst() }
     }
