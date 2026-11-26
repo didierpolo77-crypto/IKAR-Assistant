@@ -347,6 +347,9 @@ private fun IkarHome(
     var firewallAllowedCount by remember { mutableStateOf(context.getSharedPreferences("ikar_dns_firewall_stats", android.content.Context.MODE_PRIVATE).getLong("allowed_count", 0L)) }
     var firewallErrorCount by remember { mutableStateOf(context.getSharedPreferences("ikar_dns_firewall_stats", android.content.Context.MODE_PRIVATE).getLong("error_count", 0L)) }
     var firewallLastDomain by remember { mutableStateOf(context.getSharedPreferences("ikar_dns_firewall_stats", android.content.Context.MODE_PRIVATE).getString("last_domain", "Aucune") ?: "Aucune") }
+    var customBlockedDomains by remember { mutableStateOf(ThreatIntelStore.customBlockedHosts(context)) }
+    var customDomainInput by remember { mutableStateOf("") }
+    var customDomainStatus by remember { mutableStateOf("Tu peux ajouter tes propres domaines à bloquer.") }
     var observedMediaChanges by remember { mutableIntStateOf(SharedStorageBehaviorMonitor.recentChangeCount(context)) }
     var observedInstallCount by remember { mutableIntStateOf(SharedStorageBehaviorMonitor.recentInstallCount(context)) }
     var notificationsSeen by remember { mutableIntStateOf(context.getSharedPreferences("ikar_notification_privacy", android.content.Context.MODE_PRIVATE).getInt("notifications_seen", 0)) }
@@ -511,6 +514,7 @@ private fun IkarHome(
             firewallAllowedCount = firewallStats.getLong("allowed_count", 0L)
             firewallErrorCount = firewallStats.getLong("error_count", 0L)
             firewallLastDomain = firewallStats.getString("last_domain", "Aucune") ?: "Aucune"
+            customBlockedDomains = withContext(Dispatchers.IO) { ThreatIntelStore.customBlockedHosts(context) }
             kotlinx.coroutines.delay(5000)
         }
     }
@@ -1122,6 +1126,54 @@ private fun IkarHome(
                         )
                     }
                     Text("État de la base : " + threatIntelStatus, style = MaterialTheme.typography.bodySmall)
+                    Text("Règles personnelles : les domaines ajoutés ici et leurs sous-domaines seront refusés par le DNS local.", style = MaterialTheme.typography.bodySmall)
+                    OutlinedTextField(
+                        value = customDomainInput,
+                        onValueChange = { customDomainInput = it },
+                        label = { Text("Domaine à bloquer (ex. example.com)") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Button(
+                        onClick = {
+                            val candidate = customDomainInput.trim()
+                            scope.launch {
+                                val added = withContext(Dispatchers.IO) {
+                                    ThreatIntelStore.addCustomBlockedHost(context, candidate)
+                                }
+                                customBlockedDomains = withContext(Dispatchers.IO) {
+                                    ThreatIntelStore.customBlockedHosts(context)
+                                }
+                                customDomainStatus = if (added) "Domaine ajouté au blocage local."
+                                    else "Domaine invalide ou impossible à enregistrer."
+                                if (added) customDomainInput = ""
+                            }
+                        },
+                        enabled = customDomainInput.isNotBlank(),
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("Ajouter à la liste de blocage") }
+                    Text(customDomainStatus, style = MaterialTheme.typography.bodySmall)
+                    if (customBlockedDomains.isNotEmpty()) {
+                        Text("Domaines bloqués manuellement :", style = MaterialTheme.typography.bodySmall)
+                        customBlockedDomains.forEach { blockedHost ->
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text(blockedHost, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
+                                Button(
+                                    onClick = {
+                                        scope.launch {
+                                            withContext(Dispatchers.IO) {
+                                                ThreatIntelStore.removeCustomBlockedHost(context, blockedHost)
+                                            }
+                                            customBlockedDomains = withContext(Dispatchers.IO) {
+                                                ThreatIntelStore.customBlockedHosts(context)
+                                            }
+                                            customDomainStatus = "Règle retirée : " + blockedHost
+                                        }
+                                    }
+                                ) { Text("Retirer") }
+                            }
+                        }
+                    }
                     Button(
                         onClick = { selectedNavigation = "Sécurité" },
                         modifier = Modifier.fillMaxWidth()
