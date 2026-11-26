@@ -1178,7 +1178,7 @@ private fun IkarHome(
                         onClick = { selectedNavigation = "Sécurité" },
                         modifier = Modifier.fillMaxWidth()
                     ) { Text("Configurer / actualiser la base URLhaus") }
-                    Text("La base nécessite une clé Auth-Key abuse.ch. L'écran Sécurité permet de l'enregistrer dans Android Keystore et de programmer ses actualisations. Le filtre ne peut pas bloquer un domaine absent de cette base.", style = MaterialTheme.typography.bodySmall)
+                    Text("La base URLhaus nécessite une clé Auth-Key abuse.ch. Les domaines sont bloqués s'ils figurent dans URLhaus ou dans ta liste personnelle. Les requêtes autorisées sont transmises en DNS classique aux résolveurs configurés ; ceux-ci peuvent voir les noms de domaines demandés.", style = MaterialTheme.typography.bodySmall)
                 }
             }
         }
