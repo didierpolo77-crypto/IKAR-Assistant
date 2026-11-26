@@ -47,8 +47,13 @@ object RansomwareRecoveryVault {
         while (offset < buffer.size) {
             val count = input.read(buffer, offset, buffer.size - offset)
             if (count < 0) return false
-            if (count == 0) continue
-            offset += count
+            if (count == 0) {
+                val single = input.read()
+                if (single < 0) return false
+                buffer[offset++] = single.toByte()
+            } else {
+                offset += count
+            }
         }
         return true
     }
