@@ -1,6 +1,7 @@
 package com.ikar.assistant.ai
 
 import java.net.URI
+import com.ikar.assistant.data.MemoryEntry
 
 import org.json.JSONArray
 import org.json.JSONObject
@@ -203,6 +204,29 @@ object IkarOnlineModelGateway {
                 ?: throw IllegalStateException("L'analyse IA a renvoyé une réponse vide.")
         } finally {
             connection.disconnect()
+        }
+    }
+
+    /**
+     * Never leave chat unusable when the remote provider rejects a request.
+     * The fallback is explicitly identified as local/rule-based, not as an AI reply.
+     */
+    fun sendMessageWithLocalFallback(
+        apiToken: String,
+        message: String,
+        history: List<ConversationTurn>,
+        memories: List<MemoryEntry>
+    ): String {
+        return try {
+            sendMessage(apiToken, message, history)
+        } catch (error: Exception) {
+            val reason = error.localizedMessage
+                ?.replace(Regex("[\\r\\n]+"), " ")
+                ?.take(240)
+                ?.takeIf { it.isNotBlank() }
+                ?: "Erreur réseau ou fournisseur indisponible."
+            val localAnswer = OfflineChatEngine.answer(message, memories)
+            "⚠️ IA en ligne indisponible : $reason\n\nJe bascule en réponse locale (règles et mémoire du téléphone, pas un modèle IA général) :\n\n$localAnswer"
         }
     }
 
