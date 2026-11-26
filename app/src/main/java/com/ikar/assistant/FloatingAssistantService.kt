@@ -364,7 +364,7 @@ class FloatingAssistantService : Service() {
                                     ?: throw IllegalStateException(
                                         "Le mode connecté est activé, mais aucun jeton mémorisé n'est disponible pour la bulle. Dans IKAR, active « Mémoriser le jeton sur cet appareil » pour utiliser l'IA en ligne depuis la bulle."
                                     )
-                                IkarOnlineModelGateway.sendMessage(token, question, history)
+                                IkarOnlineModelGateway.sendMessageWithLocalFallback(token, question, history, savedEntries)
                             }
                             IkarOrchestrator.Destination.LOCAL_SECURITY_GUIDANCE,
                             IkarOrchestrator.Destination.LOCAL_KNOWLEDGE,
