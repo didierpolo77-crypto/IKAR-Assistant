@@ -143,8 +143,8 @@ object RansomwareRecoveryVault {
                 ?.takeIf { it.isNotBlank() }
             val safeName = (storedName ?: "ikar-restored-$backupId.bin")
                 .replace('/', '_')
-                .replace('\\\\', '_')
-                .replace(Regex("[\\\\p{Cntrl}]"), "_")
+                .replace('\\', '_')
+                .replace(Regex("[\\p{Cntrl}]"), "_")
                 .take(180)
                 .ifBlank { "ikar-restored-$backupId.bin" }
             val outputDoc = folder.createFile("application/octet-stream", safeName)
