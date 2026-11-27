@@ -559,7 +559,12 @@ private fun IkarHome(
 
     val folderPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         if (uri != null) {
-            runCatching { context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
+            runCatching {
+                context.contentResolver.takePersistableUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                )
+            }
             savedFolderUri = uri.toString()
             context.getSharedPreferences("ikar_security_center", android.content.Context.MODE_PRIVATE).edit().putString("monitored_folder_uri", uri.toString()).apply()
             folderScanRunning = true
