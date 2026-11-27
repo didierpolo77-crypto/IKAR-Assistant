@@ -424,7 +424,7 @@ class IkarSafeBrowserActivity : Activity() {
                 setTitle(filename)
                 setDescription("Téléchargement demandé depuis le navigateur IKAR")
                 setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-                setAllowedOverMetered(true)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) setAllowedOverMetered(true)
                 setAllowedOverRoaming(false)
                 setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, filename)
                 if (mimeType.isNotBlank()) setMimeType(mimeType)
