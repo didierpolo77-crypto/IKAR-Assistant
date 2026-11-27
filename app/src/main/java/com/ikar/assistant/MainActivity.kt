@@ -96,6 +96,8 @@ import com.ikar.assistant.security.YaraForgeRulesScheduler
 import com.ikar.assistant.security.YaraForgeRulesStatus
 import com.ikar.assistant.security.ThreatIntelScheduler
 import com.ikar.assistant.security.IkarDnsFirewallService
+import com.ikar.assistant.security.AppNetworkUsageMonitor
+import com.ikar.assistant.security.AppNetworkUsage
 import com.ikar.assistant.security.SharedStorageBehaviorMonitor
 import com.ikar.assistant.security.DeviceBehaviorAnalyzer
 import com.ikar.assistant.security.LinkRiskReport
@@ -347,6 +349,9 @@ private fun IkarHome(
     var firewallAllowedCount by remember { mutableStateOf(context.getSharedPreferences("ikar_dns_firewall_stats", android.content.Context.MODE_PRIVATE).getLong("allowed_count", 0L)) }
     var firewallErrorCount by remember { mutableStateOf(context.getSharedPreferences("ikar_dns_firewall_stats", android.content.Context.MODE_PRIVATE).getLong("error_count", 0L)) }
     var firewallLastDomain by remember { mutableStateOf(context.getSharedPreferences("ikar_dns_firewall_stats", android.content.Context.MODE_PRIVATE).getString("last_domain", "Aucune") ?: "Aucune") }
+    var appNetworkUsage by remember { mutableStateOf<List<AppNetworkUsage>>(emptyList()) }
+    var networkUsageStatus by remember { mutableStateOf("Autorisation des statistiques Android requise pour afficher les volumes par application.") }
+    var usageAccessGranted by remember { mutableStateOf(AppNetworkUsageMonitor.hasUsageAccess(context)) }
     var customBlockedDomains by remember { mutableStateOf(ThreatIntelStore.customBlockedHosts(context)) }
     var customDomainInput by remember { mutableStateOf("") }
     var customDomainStatus by remember { mutableStateOf("Tu peux ajouter tes propres domaines à bloquer.") }
