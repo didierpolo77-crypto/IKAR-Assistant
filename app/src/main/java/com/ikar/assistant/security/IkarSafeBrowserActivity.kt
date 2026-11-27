@@ -330,7 +330,11 @@ class IkarSafeBrowserActivity : Activity() {
             return
         }
         val host = runCatching { java.net.IDN.toASCII(rawHost.trimEnd('.'), java.net.IDN.USE_STD3_ASCII_RULES).lowercase() }.getOrDefault("")
-        if (host.isBlank() || runCatching { ThreatIntelStore.isKnownMaliciousHost(this, host) }.getOrDefault(false)) {
+        val threatMatch = runCatching {
+            ThreatIntelStore.isKnownMaliciousHost(this, host) ||
+                ThreatIntelStore.isKnownMalicious(this, rawUrl)
+        }.getOrDefault(false)
+        if (host.isBlank() || threatMatch) {
             status.text = "Téléchargement bloqué : domaine répertorié comme malveillant."
             Toast.makeText(this, "Web Shield a bloqué le téléchargement.", Toast.LENGTH_LONG).show()
             return
