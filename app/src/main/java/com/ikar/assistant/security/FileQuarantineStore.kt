@@ -33,7 +33,9 @@ object FileQuarantineStore {
     private const val MAGIC_2 = 81 // Q
     private const val MAGIC_3 = 1
 
-    data class Item(val id: String, val name: String, val sizeBytes: Long, val sha256: String)
+    data class Item(val id: String, val name: String, val sizeBytes: Long, val sha256: String) {
+        val size: Long get() = sizeBytes
+    }
     data class QuarantineOutcome(val item: Item, val originalRemoved: Boolean)
 
     private fun directory(context: Context): File =
@@ -149,8 +151,15 @@ object FileQuarantineStore {
      * still has the same size and SHA-256. A failed delete leaves the backup intact.
      */
     @Synchronized
-    fun quarantineAndRemove(context: Context, sourceUri: Uri): QuarantineOutcome {
+    fun quarantineAndRemove(
+        context: Context,
+        sourceUri: Uri,
+        expectedSha256: String? = null
+    ): QuarantineOutcome {
         val item = quarantine(context, sourceUri)
+        if (expectedSha256 != null && !item.sha256.equals(expectedSha256, ignoreCase = true)) {
+            return QuarantineOutcome(item, false)
+        }
         val current = digestSource(context, sourceUri)
         if (current.first != item.sizeBytes || current.second != item.sha256) {
             return QuarantineOutcome(item, false)
