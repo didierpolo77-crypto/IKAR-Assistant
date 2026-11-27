@@ -14,7 +14,6 @@ internal object IkarTrackerBlocklist {
         "googletagmanager.com",
         "adservice.google.com",
         "connect.facebook.net",
-        "facebook.net",
         "hotjar.com",
         "hotjar.io",
         "clarity.ms",
