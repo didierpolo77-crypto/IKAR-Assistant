@@ -143,7 +143,7 @@ class IkarSafeBrowserActivity : Activity() {
                         if (host == null || isIpLiteralHost(host) ||
                             runCatching { ThreatIntelStore.isKnownMaliciousHost(this@IkarSafeBrowserActivity, host) }.getOrDefault(false)
                         ) {
-                            status.text = "Destination bloquée : domaine présent dans la base locale de menaces."
+                            status.text = "Destination bloquée : domaine invalide, IP directe ou menace connue."
                             Toast.makeText(this@IkarSafeBrowserActivity, "Domaine malveillant connu bloqué par IKAR.", Toast.LENGTH_LONG).show()
                             return true
                         }
@@ -334,7 +334,9 @@ class IkarSafeBrowserActivity : Activity() {
         val downloadUri = runCatching { Uri.parse(rawUrl) }.getOrNull()
         val scheme = downloadUri?.scheme?.lowercase()
         val rawHost = downloadUri?.host.orEmpty()
-        if (downloadUri == null || rawHost.isBlank() || scheme != "https") {
+        if (downloadUri == null || rawHost.isBlank() || scheme != "https" ||
+            downloadUri.encodedAuthority?.contains("@") == true
+        ) {
             status.text = "Téléchargement bloqué : URL invalide ou connexion non HTTPS."
             Toast.makeText(this, "IKAR bloque ce téléchargement non sécurisé.", Toast.LENGTH_LONG).show()
             return
@@ -344,7 +346,7 @@ class IkarSafeBrowserActivity : Activity() {
             ThreatIntelStore.isKnownMaliciousHost(this, host) ||
                 ThreatIntelStore.isKnownMalicious(this, rawUrl)
         }.getOrDefault(false)
-        if (host.isBlank() || threatMatch) {
+        if (host.isBlank() || isIpLiteralHost(host) || threatMatch) {
             status.text = "Téléchargement bloqué : domaine répertorié comme malveillant."
             Toast.makeText(this, "Web Shield a bloqué le téléchargement.", Toast.LENGTH_LONG).show()
             return
@@ -485,7 +487,7 @@ class IkarSafeBrowserActivity : Activity() {
         if (parsedHost == null || isIpLiteralHost(parsedHost) ||
             runCatching { ThreatIntelStore.isKnownMaliciousHost(this, parsedHost) }.getOrDefault(false)
         ) {
-            status.text = "Web Shield : ce domaine figure dans la base locale de menaces. Navigation bloquée."
+            status.text = "Web Shield : domaine invalide, IP directe ou menace connue. Navigation bloquée."
             Toast.makeText(this, "Domaine malveillant connu bloqué par IKAR.", Toast.LENGTH_LONG).show()
             return
         }
