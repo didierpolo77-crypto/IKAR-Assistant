@@ -414,11 +414,11 @@ class IkarSafeBrowserActivity : Activity() {
             }
             (getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager).enqueue(request)
         }.onSuccess {
-            val sizeText = if (contentLength > 0L) " Taille annoncée : \${contentLength / 1024} Ko." else ""
+            val sizeText = if (contentLength > 0L) " Taille annoncée : ${contentLength / 1024} Ko." else ""
             status.text = "Téléchargement lancé : $filename.$sizeText Fichier non encore analysé par l'antivirus IKAR."
             Toast.makeText(this, "Téléchargement lancé. Analyse antivirus non effectuée.", Toast.LENGTH_LONG).show()
         }.onFailure { error ->
-            status.text = "Téléchargement impossible : \${error.localizedMessage ?: "erreur Android"}."
+            status.text = "Téléchargement impossible : ${error.localizedMessage ?: "erreur Android"}."
         }
     }
 
