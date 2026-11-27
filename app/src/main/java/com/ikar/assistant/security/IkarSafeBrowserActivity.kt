@@ -150,11 +150,10 @@ class IkarSafeBrowserActivity : Activity() {
                         val assessment = SecurityCenter.checkLink(target)
                         if (assessment.suspicious) {
                             AlertDialog.Builder(this@IkarSafeBrowserActivity)
-                                .setTitle("Lien à vérifier")
+                                .setTitle("Navigation bloquée par le mode strict")
                                 .setMessage(assessment.reasons.joinToString("\n\n") +
-                                    "\n\nIKAR ne peut pas certifier qu'un site est malveillant. Continuer malgré cet avertissement ?")
-                                .setNegativeButton("Bloquer", null)
-                                .setPositiveButton("Continuer") { _, _ -> view.loadUrl(target) }
+                                    "\n\nLe mode strict bloque les destinations présentant des signaux de risque.")
+                                .setPositiveButton("Compris", null)
                                 .show()
                             status.text = "Navigation suspendue : destination à vérifier."
                             return true
@@ -490,22 +489,18 @@ class IkarSafeBrowserActivity : Activity() {
             Toast.makeText(this, "Domaine malveillant connu bloqué par IKAR.", Toast.LENGTH_LONG).show()
             return
         }
+        if (safeBrowsingReady != true) {
+            status.text = "Navigation bloquée : Safe Browsing Android n'a pas pu être confirmé. Le mode strict refuse d'ouvrir la page sans cette vérification."
+            return
+        }
         val localAssessment = SecurityCenter.checkLink(normalized)
         if (localAssessment.suspicious) {
             status.text = "Lien à vérifier · navigation suspendue en attendant ton accord."
             AlertDialog.Builder(this)
-                .setTitle("Vérification de sécurité")
+                .setTitle("Navigation bloquée par le mode strict")
                 .setMessage(localAssessment.reasons.joinToString("\n\n") +
-                    "\n\nIKAR ne peut pas confirmer à lui seul qu'un lien est malveillant. Veux-tu quand même l'ouvrir ?")
-                .setNegativeButton("Retour", null)
-                .setPositiveButton("Continuer") { _, _ ->
-                    status.text = if (safeBrowsingReady == true) {
-                "Ouverture avec avertissement · Safe Browsing Android activé."
-            } else {
-                "Ouverture avec avertissement · Safe Browsing non confirmé."
-            }
-                    browser.loadUrl(normalized)
-                }
+                    "\n\nLe mode strict bloque les destinations présentant des signaux de risque.")
+                .setPositiveButton("Compris", null)
                 .show()
         } else {
             status.text = if (safeBrowsingReady == true) {
