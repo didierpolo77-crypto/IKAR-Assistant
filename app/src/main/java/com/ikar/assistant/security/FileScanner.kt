@@ -46,7 +46,7 @@ object FileScanner {
         "android.permission.READ_PHONE_STATE" to "État du téléphone"
     )
 
-    fun scan(context: Context, uri: Uri): FileScanReport {
+    fun scan(context: Context, uri: Uri, enrichOnline: Boolean = true): FileScanReport {
         val resolver = context.contentResolver
         val name = resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
             ?.use { cursor ->
@@ -117,7 +117,7 @@ object FileScanner {
                 indicators += "Règle YARA locale ${match.rule} : ${match.detail}"
             }
             // Enrich local YARA/hash results with MalwareBazaar metadata. Only hashes and rule names leave the device.
-            val malwareBazaar = MalwareBazaarClient.enrich(context, hash, yaraMatches.map { it.rule })
+            val malwareBazaar = if (enrichOnline) MalwareBazaarClient.enrich(context, hash, yaraMatches.map { it.rule }) else null
             if (malwareBazaar?.exactHashMatch == true) {
                 indicators += "Empreinte SHA-256 confirmée dans MalwareBazaar${malwareBazaar.family?.let { " : famille $it" } ?: ""}."
             } else if (malwareBazaar?.relatedRuleFamilies?.isNotEmpty() == true) {
