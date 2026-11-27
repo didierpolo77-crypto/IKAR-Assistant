@@ -7,6 +7,8 @@ import android.graphics.Color
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.view.ViewGroup
 import android.webkit.SafeBrowsingResponse
 import android.webkit.SslErrorHandler
@@ -28,6 +30,19 @@ class IkarSafeBrowserActivity : Activity() {
     private lateinit var browser: WebView
     private lateinit var address: EditText
     private lateinit var status: TextView
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private var safeBrowsingReady: Boolean? = null
+    private var pendingInitialUrl: String? = null
+    private var initialNavigationStarted = false
+    private var currentNavigationSafeBrowsing = false
+
+    private val safeBrowsingTimeout = Runnable {
+        if (!initialNavigationStarted && !isFinishing && !isDestroyed) {
+            safeBrowsingReady = false
+            status.text = "Safe Browsing n'a pas répondu à temps · ouverture avec contrôles locaux uniquement."
+            startInitialNavigation()
+        }
+    }
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -85,13 +100,22 @@ class IkarSafeBrowserActivity : Activity() {
                 }
 
                 override fun onPageStarted(view: WebView, url: String?, favicon: android.graphics.Bitmap?) {
-                    status.text = "Chargement de la page…"
+                    currentNavigationSafeBrowsing = safeBrowsingReady == true
+                    status.text = if (currentNavigationSafeBrowsing) {
+                        "Chargement · Safe Browsing Android activé."
+                    } else {
+                        "Chargement · Safe Browsing non confirmé, prudence renforcée."
+                    }
                 }
 
                 override fun onPageFinished(view: WebView, url: String?) {
                     if (!url.isNullOrBlank()) {
                         address.setText(url)
-                        status.text = "Page chargée · Safe Browsing Android et contrôles locaux actifs selon disponibilité."
+                        status.text = if (currentNavigationSafeBrowsing) {
+                            "Page chargée · Safe Browsing Android activé pour cette navigation."
+                        } else {
+                            "Page chargée · Safe Browsing non confirmé pour cette navigation ; contrôles locaux heuristiques uniquement."
+                        }
                     }
                 }
 
@@ -148,28 +172,43 @@ class IkarSafeBrowserActivity : Activity() {
         address.setText(initial)
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
-            status.text = "Initialisation de Safe Browsing · chargement de la page…"
-            // Navigation must not depend on the asynchronous Safe Browsing callback:
-            // some WebView providers may delay or fail that callback.
-            loadAddress(initial)
+            pendingInitialUrl = initial
+            status.text = "Initialisation de Safe Browsing · navigation en attente."
+            // Do not load the first page before WebView reports whether Safe Browsing
+            // initialized. If the provider never calls back, continue after a timeout
+            // with an explicit warning rather than silently claiming protection.
+            mainHandler.postDelayed(safeBrowsingTimeout, 4_000L)
             WebView.startSafeBrowsing(applicationContext) { ready ->
                 runOnUiThread {
                     if (!isFinishing && !isDestroyed) {
-                        status.text = if (ready) {
-                            "Safe Browsing Android activé · menaces connues vérifiées"
+                        mainHandler.removeCallbacks(safeBrowsingTimeout)
+                        safeBrowsingReady = ready
+                        if (ready) {
+                            status.text = "Safe Browsing Android activé."
                         } else {
-                            "Safe Browsing indisponible · prudence renforcée"
+                            status.text = "Safe Browsing indisponible · contrôles locaux uniquement."
                         }
+                        startInitialNavigation()
                     }
                 }
             }
         } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            status.text = "Safe Browsing WebView activé · protection selon la version Android"
+            safeBrowsingReady = null
+            status.text = "Safe Browsing WebView configuré selon le fournisseur Android ; activation non vérifiable ici."
             loadAddress(initial)
         } else {
-            status.text = "Protection Web avancée indisponible sur cette version Android."
+            safeBrowsingReady = false
+            status.text = "Protection Safe Browsing indisponible sur cette version Android."
             loadAddress(initial)
         }
+    }
+
+    private fun startInitialNavigation() {
+        if (initialNavigationStarted || isFinishing || isDestroyed) return
+        initialNavigationStarted = true
+        val initial = pendingInitialUrl
+        pendingInitialUrl = null
+        if (initial != null) loadAddress(initial)
     }
 
     private fun loadAddress(raw: String) {
@@ -196,12 +235,20 @@ class IkarSafeBrowserActivity : Activity() {
                     "\n\nIKAR ne peut pas confirmer à lui seul qu'un lien est malveillant. Veux-tu quand même l'ouvrir ?")
                 .setNegativeButton("Retour", null)
                 .setPositiveButton("Continuer") { _, _ ->
-                    status.text = "Ouverture avec avertissement · Safe Browsing Android en complément."
+                    status.text = if (safeBrowsingReady == true) {
+                "Ouverture avec avertissement · Safe Browsing Android activé."
+            } else {
+                "Ouverture avec avertissement · Safe Browsing non confirmé."
+            }
                     browser.loadUrl(normalized)
                 }
                 .show()
         } else {
-            status.text = "Aucun signal heuristique local évident · contrôle Safe Browsing en complément."
+            status.text = if (safeBrowsingReady == true) {
+                "Aucun signal heuristique local évident · Safe Browsing Android en complément."
+            } else {
+                "Aucun signal heuristique local évident · Safe Browsing non confirmé."
+            }
             browser.loadUrl(normalized)
         }
     }
@@ -212,6 +259,7 @@ class IkarSafeBrowserActivity : Activity() {
     }
 
     override fun onDestroy() {
+        mainHandler.removeCallbacks(safeBrowsingTimeout)
         if (::browser.isInitialized) {
             browser.stopLoading()
             browser.destroy()
