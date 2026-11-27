@@ -189,7 +189,7 @@ object FileScanner {
                 add("SHA-256")
                 add(when {
                     usingOfficialYara -> "libyara 4.5.0 officiel ARMv7 exécuté (${yaraMatches.size} règle(s) déclenchée(s))"
-                    else -> "Moteur Kotlin YARA-compatible (sous-ensemble, lecture en flux) exécuté (${yaraMatches.size} règle(s)); libyara indisponible : ${nativeYara.error ?: "raison inconnue"}"
+                    else -> "Moteur Kotlin YARA-compatible (sous-ensemble, lecture en flux) exécuté (${yaraMatches.size} règle(s)); seules les règles intégrées sont analysées : YARA Forge nécessite libyara natif. Libyara indisponible : ${nativeYara.error ?: "raison inconnue"}"
                 })
                 add("URLhaus SHA-256 (${if (ThreatIntelStore.hashCount(context) > 0) "base présente" else "base absente"})")
                 add("ClamAV : ${clamAvStatus.detail}")
