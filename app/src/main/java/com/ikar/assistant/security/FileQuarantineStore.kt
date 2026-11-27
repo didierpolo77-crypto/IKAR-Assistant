@@ -183,8 +183,11 @@ object FileQuarantineStore {
         }
         val document = DocumentFile.fromSingleUri(context, sourceUri)
             ?: return QuarantineOutcome(item, false)
-        val removed = runCatching { document.delete() }.getOrDefault(false)
-        return QuarantineOutcome(item, removed)
+        val deleteAccepted = runCatching { document.delete() }.getOrDefault(false)
+        val stillExists = runCatching {
+            DocumentFile.fromSingleUri(context, sourceUri)?.exists() ?: true
+        }.getOrDefault(true)
+        return QuarantineOutcome(item, deleteAccepted && !stillExists)
     }
 
     private fun verifyEncryptedFile(file: File, expectedHash: String, expectedSize: Long): Boolean {
