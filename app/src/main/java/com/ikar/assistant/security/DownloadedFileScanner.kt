@@ -70,6 +70,9 @@ object DownloadedFileScanner {
                             limited++
                             unscanned += "$name — couverture YARA limitée : libyara natif indisponible ; fichier non certifié sûr."
                         }
+                        if (report.engines.any { it.contains("ClamAV natif non embarqué") || it.contains("pont JNI et bases ClamAV à valider") }) {
+                            unscanned += "$name — ClamAV n'est pas opérationnel dans cette version ; analyse antivirus multicouche incomplète."
+                        }
                     } catch (error: Exception) {
                         scanned++
                         prefs.edit().putString(uriKey, "UNSCANNED:$signature").apply()
