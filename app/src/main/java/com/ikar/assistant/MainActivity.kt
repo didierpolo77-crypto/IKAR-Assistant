@@ -951,12 +951,12 @@ private fun IkarHome(
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text("Protection Web IKAR", style = MaterialTheme.typography.titleLarge)
-                    Text("Contrôles indépendants : navigation WebView avec Safe Browsing Android, analyse heuristique locale, réputation en ligne et résolution DNS. Aucun fichier du téléphone n'est envoyé par ces contrôles.")
+                    Text("Navigation IKAR : Safe Browsing Android si disponible, contrôle heuristique local des navigations et Privacy Guard (cookies tiers bloqués, géolocalisation refusée, cache et données WebView effacés à la fermeture). Le filtre DNS est un module séparé. Ces protections ne filtrent pas les autres navigateurs ni tout le trafic des applications.")
                     Button(
                         onClick = { context.startActivity(Intent(context, IkarSafeBrowserActivity::class.java)) },
                         modifier = Modifier.fillMaxWidth()
                     ) { Text("Ouvrir le navigateur protégé IKAR") }
-                    Text("Safe Browsing dépend des services Android et ne filtre pas les navigateurs externes. Les liens suspects sont suspendus dans le navigateur pour demander confirmation.", style = MaterialTheme.typography.bodySmall)
+                    Text("Privacy Guard réduit certaines traces dans le navigateur IKAR, mais ne masque pas l’adresse IP et ne neutralise pas toutes les techniques de fingerprinting. Les contrôles de réputation en ligne restent disponibles dans leur outil dédié ; ils ne sont pas exécutés automatiquement sur chaque page.", style = MaterialTheme.typography.bodySmall)
                 }
             }
 
