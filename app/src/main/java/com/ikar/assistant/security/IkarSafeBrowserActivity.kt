@@ -2,6 +2,9 @@ package com.ikar.assistant.security
 
 import android.app.Activity
 import android.app.AlertDialog
+import android.app.DownloadManager
+import android.content.Context
+import android.os.Environment
 import android.annotation.SuppressLint
 import android.graphics.Color
 import android.net.Uri
@@ -264,6 +267,9 @@ class IkarSafeBrowserActivity : Activity() {
         root.addView(privacyButton)
         root.addView(status)
         root.addView(browser)
+        browser.setDownloadListener { url, userAgent, contentDisposition, mimeType, contentLength ->
+            handleDownload(url, userAgent, contentDisposition, mimeType, contentLength)
+        }
         setContentView(root)
         privacyModeEnabled = getSharedPreferences("ikar_browser_privacy", MODE_PRIVATE)
             .getBoolean("privacy_mode_enabled", true)
@@ -306,6 +312,113 @@ class IkarSafeBrowserActivity : Activity() {
             safeBrowsingReady = false
             status.text = "Protection Safe Browsing indisponible sur cette version Android."
             loadAddress(initial)
+        }
+    }
+
+    /**
+     * Blocks known malicious destinations and executable/script payloads.
+     * Archives and macro-enabled Office documents require explicit confirmation.
+     * Other files use Android DownloadManager; this is not an antivirus scan.
+     */
+    private fun handleDownload(rawUrl: String, userAgent: String?, contentDisposition: String?, mimeType: String?, contentLength: Long) {
+        val downloadUri = runCatching { Uri.parse(rawUrl) }.getOrNull()
+        val scheme = downloadUri?.scheme?.lowercase()
+        val rawHost = downloadUri?.host.orEmpty()
+        if (downloadUri == null || rawHost.isBlank() || scheme != "https") {
+            status.text = "Téléchargement bloqué : URL invalide ou connexion non HTTPS."
+            Toast.makeText(this, "IKAR bloque ce téléchargement non sécurisé.", Toast.LENGTH_LONG).show()
+            return
+        }
+        val host = runCatching { java.net.IDN.toASCII(rawHost.trimEnd('.'), java.net.IDN.USE_STD3_ASCII_RULES).lowercase() }.getOrDefault("")
+        if (host.isBlank() || runCatching { ThreatIntelStore.isKnownMaliciousHost(this, host) }.getOrDefault(false)) {
+            status.text = "Téléchargement bloqué : domaine répertorié comme malveillant."
+            Toast.makeText(this, "Web Shield a bloqué le téléchargement.", Toast.LENGTH_LONG).show()
+            return
+        }
+        val assessment = SecurityCenter.checkLink(rawUrl)
+        if (assessment.suspicious) {
+            status.text = "Téléchargement bloqué : l'URL présente des signaux suspects."
+            AlertDialog.Builder(this).setTitle("Téléchargement bloqué par Web Shield")
+                .setMessage(assessment.reasons.joinToString("\n\n") + "\n\nIKAR refuse ce téléchargement car sa destination présente des signaux de risque.")
+                .setPositiveButton("Compris", null).show()
+            return
+        }
+        val filename = extractDownloadFilename(contentDisposition, downloadUri)
+        val extension = filename.substringAfterLast('.', "").lowercase()
+        val normalizedMime = mimeType.orEmpty().substringBefore(';').trim().lowercase()
+        val executableExtensions = setOf(
+            "apk", "xapk", "apks", "aab", "exe", "msi", "msp", "com", "scr", "pif",
+            "dll", "so", "dylib", "dmg", "pkg", "deb", "rpm", "jar", "class", "dex",
+            "sh", "bash", "zsh", "bat", "cmd", "ps1", "psm1", "vbs", "vbe", "js",
+            "jse", "hta", "wsf", "wsh", "reg", "lnk"
+        )
+        val executableMimeTypes = setOf(
+            "application/vnd.android.package-archive", "application/x-msdownload",
+            "application/x-dosexec", "application/x-executable", "application/x-sh",
+            "application/x-shellscript", "application/java-archive", "application/x-java-archive",
+            "application/x-sharedlib"
+        )
+        val isExecutable = extension in executableExtensions ||
+            normalizedMime in executableMimeTypes ||
+            normalizedMime.startsWith("application/x-executable")
+        if (isExecutable) {
+            status.text = "Téléchargement bloqué : fichier exécutable ou script à haut risque ($filename)."
+            AlertDialog.Builder(this).setTitle("Fichier dangereux bloqué")
+                .setMessage("IKAR a bloqué « $filename » ($normalizedMime). Les applications, exécutables, bibliothèques et scripts peuvent installer du code ou compromettre l'appareil. Ce blocage est préventif ; aucune analyse antivirus complète du fichier n'a été effectuée.")
+                .setPositiveButton("Fermer", null).show()
+            return
+        }
+        val archiveExtensions = setOf("zip", "rar", "7z", "tar", "gz", "bz2", "xz", "iso", "img")
+        val macroExtensions = setOf("docm", "xlsm", "pptm", "dotm", "xltm", "potm")
+        val isContainerOrMacro = extension in archiveExtensions || extension in macroExtensions ||
+            normalizedMime in setOf(
+                "application/zip", "application/x-7z-compressed", "application/vnd.rar",
+                "application/x-rar-compressed", "application/vnd.ms-word.document.macroenabled.12",
+                "application/vnd.ms-excel.sheet.macroenabled.12",
+                "application/vnd.ms-powerpoint.presentation.macroenabled.12"
+            )
+        val proceed = { enqueueDownload(rawUrl, filename, userAgent, normalizedMime, contentLength) }
+        if (isContainerOrMacro) {
+            AlertDialog.Builder(this).setTitle("Fichier à examiner avec prudence")
+                .setMessage("« $filename » est une archive ou un document pouvant contenir des macros. IKAR ne peut pas inspecter son contenu avant téléchargement. Ne l'ouvre pas si tu ne connais pas sa provenance.\n\nContinuer le téléchargement ?")
+                .setNegativeButton("Bloquer", null)
+                .setPositiveButton("Télécharger") { _, _ -> proceed() }.show()
+        } else proceed()
+    }
+
+    private fun extractDownloadFilename(contentDisposition: String?, uri: Uri): String {
+        val dispositionName = contentDisposition?.let {
+            Regex("""filename\*?=(?:UTF-8''|")?([^";]+)""", RegexOption.IGNORE_CASE)
+                .find(it)?.groupValues?.getOrNull(1)
+        }?.let { Uri.decode(it.trim().trim('"')) }
+        val candidate = dispositionName ?: uri.lastPathSegment?.let(Uri::decode) ?: "ikar-download"
+        val safe = candidate.replace(Regex("""[\\/:*?"<>|\u0000-\u001F]"""), "_")
+            .trim().trimEnd('.').take(120)
+        return safe.ifBlank { "ikar-download" }
+    }
+
+    private fun enqueueDownload(url: String, filename: String, userAgent: String?, mimeType: String, contentLength: Long) {
+        runCatching {
+            val request = DownloadManager.Request(Uri.parse(url)).apply {
+                setTitle(filename)
+                setDescription("Téléchargement demandé depuis le navigateur IKAR")
+                setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                setAllowedOverMetered(true)
+                setAllowedOverRoaming(false)
+                setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, filename)
+                if (mimeType.isNotBlank()) setMimeType(mimeType)
+                if (!userAgent.isNullOrBlank()) addRequestHeader("User-Agent", userAgent)
+                CookieManager.getInstance().getCookie(url)?.takeIf { it.isNotBlank() }?.let {
+                    addRequestHeader("Cookie", it)
+                }
+            }
+            (getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager).enqueue(request)
+        }.onSuccess {
+            val sizeText = if (contentLength > 0L) " Taille annoncée : \${contentLength / 1024} Ko." else ""
+            status.text = "Téléchargement lancé : $filename.$sizeText Fichier non encore analysé par l'antivirus IKAR."
+            Toast.makeText(this, "Téléchargement lancé. Analyse antivirus non effectuée.", Toast.LENGTH_LONG).show()
+        }.onFailure { error ->
+            status.text = "Téléchargement impossible : \${error.localizedMessage ?: "erreur Android"}."
         }
     }
 
