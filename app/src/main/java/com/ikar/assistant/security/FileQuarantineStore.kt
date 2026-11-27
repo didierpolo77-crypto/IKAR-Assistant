@@ -57,6 +57,22 @@ object FileQuarantineStore {
         return generator.generateKey()
     }
 
+    private fun readFully(input: java.io.InputStream, buffer: ByteArray): Boolean {
+        var offset = 0
+        while (offset < buffer.size) {
+            val count = input.read(buffer, offset, buffer.size - offset)
+            if (count < 0) return false
+            if (count == 0) {
+                val single = input.read()
+                if (single < 0) return false
+                buffer[offset++] = single.toByte()
+            } else {
+                offset += count
+            }
+        }
+        return true
+    }
+
     private fun digestSource(context: Context, uri: Uri): Pair<Long, String> {
         val digest = MessageDigest.getInstance("SHA-256")
         var size = 0L
@@ -160,7 +176,8 @@ object FileQuarantineStore {
         if (expectedSha256 != null && !item.sha256.equals(expectedSha256, ignoreCase = true)) {
             return QuarantineOutcome(item, false)
         }
-        val current = digestSource(context, sourceUri)
+        val current = runCatching { digestSource(context, sourceUri) }.getOrNull()
+            ?: return QuarantineOutcome(item, false)
         if (current.first != item.sizeBytes || current.second != item.sha256) {
             return QuarantineOutcome(item, false)
         }
@@ -173,12 +190,12 @@ object FileQuarantineStore {
     private fun verifyEncryptedFile(file: File, expectedHash: String, expectedSize: Long): Boolean {
         file.inputStream().buffered().use { input ->
             val magic = ByteArray(4)
-            if (input.read(magic) != 4 || !magic.contentEquals(
+            if (!readFully(input, magic) || !magic.contentEquals(
                     byteArrayOf(MAGIC_0.toByte(), MAGIC_1.toByte(), MAGIC_2.toByte(), MAGIC_3.toByte())
                 )
             ) return false
             val iv = ByteArray(IV_BYTES)
-            if (input.read(iv) != IV_BYTES) return false
+            if (!readFully(input, iv)) return false
             val cipher = Cipher.getInstance(TRANSFORMATION)
             cipher.init(Cipher.DECRYPT_MODE, secretKey(), GCMParameterSpec(TAG_BITS, iv))
             val digest = MessageDigest.getInstance("SHA-256")
@@ -227,11 +244,11 @@ object FileQuarantineStore {
         try {
             encryptedFile.inputStream().buffered().use { input ->
                 val magic = ByteArray(4)
-                require(input.read(magic) == 4 && magic.contentEquals(
+                require(readFully(input, magic) && magic.contentEquals(
                     byteArrayOf(MAGIC_0.toByte(), MAGIC_1.toByte(), MAGIC_2.toByte(), MAGIC_3.toByte())
                 )) { "Format de quarantaine invalide." }
                 val iv = ByteArray(IV_BYTES)
-                require(input.read(iv) == IV_BYTES) { "En-tête de quarantaine incomplet." }
+                require(readFully(input, iv)) { "En-tête de quarantaine incomplet." }
                 val cipher = Cipher.getInstance(TRANSFORMATION)
                 cipher.init(Cipher.DECRYPT_MODE, secretKey(), GCMParameterSpec(TAG_BITS, iv))
                 val digest = MessageDigest.getInstance("SHA-256")
