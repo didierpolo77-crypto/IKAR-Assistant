@@ -250,7 +250,7 @@ object FileQuarantineStore {
     }
 
     private fun safeName(value: String): String =
-        value.replace('/', '_').replace('\\\\', '_')
+        value.replace("/", "_").replace("\\", "_")
             .replace(Regex("[\\p{Cntrl}]"), "_")
             .take(180).ifBlank { "fichier-restaure.bin" }
 }
