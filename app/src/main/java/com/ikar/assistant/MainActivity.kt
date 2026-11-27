@@ -1220,7 +1220,7 @@ private fun IkarHome(
                         Text("Surveillance périodique en arrière-plan")
                         Text(
                             if (savedFolderUri == null) "Choisis d'abord un dossier pour autoriser cette surveillance."
-                            else "IKAR comparera périodiquement les fichiers de ce dossier et signalera les changements importants. Une rafale d'événements MediaStore peut déclencher un audit immédiat, mais IKAR ne bloque pas les écritures et ne peut pas restaurer automatiquement les fichiers.",
+                            else "Sélectionne le dossier partagé « Download / Téléchargements » : IKAR analysera aussi les fichiers enregistrés par Chrome et les autres applications dans ce dossier (SHA-256 + YARA locale), après leur enregistrement. Les fichiers récents sont laissés finir, puis contrôlés en arrière-plan. Android impose un délai (au moins 15 min pour le contrôle périodique) : ce contrôle ne bloque pas l'écriture avant téléchargement et ne couvre pas les dossiers privés des autres applications.",
                             style = MaterialTheme.typography.bodySmall
                         )
                     }
@@ -1242,7 +1242,7 @@ private fun IkarHome(
                         }
                     )
                 }
-                Text("Fréquence minimale Android : 15 minutes, mais le système peut retarder les contrôles pour économiser la batterie. IKAR compare les ajouts, modifications et suppressions ; il ne peut pas restaurer automatiquement les fichiers.", style = MaterialTheme.typography.bodySmall)
+                Text("Analyse des téléchargements partagés : les nouveaux fichiers sont contrôlés localement après stabilisation. Les fichiers suspects ou non analysables déclenchent une alerte ; IKAR ne supprime aucun fichier automatiquement. Les octets des fichiers ne sont pas envoyés au serveur par ce contrôle. La vérification périodique Android démarre au minimum toutes les 15 minutes et peut être retardée par le système.", style = MaterialTheme.typography.bodySmall)
                 Text("Observation locale : $observedMediaChanges changement(s) MediaStore pendant la dernière minute ; $observedInstallCount installation(s) ou mise(s) à jour d'applications pendant les dix dernières minutes. IKAR combine ces événements avec les permissions accordées, les accès spéciaux, les notifications autorisées et les audits de dossiers. Observation MediaStore active uniquement quand IKAR est ouvert.", style = MaterialTheme.typography.bodySmall)
                 val deviceBehavior = DeviceBehaviorAnalyzer.assess(observedMediaChanges, observedInstallCount)
                 Text("Corrélation comportementale locale : ${deviceBehavior.level} (${deviceBehavior.score}/100)", style = MaterialTheme.typography.titleSmall)
