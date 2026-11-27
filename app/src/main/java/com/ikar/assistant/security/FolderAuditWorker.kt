@@ -42,8 +42,20 @@ object FolderAuditScheduler {
         )
     }
 
+    fun scheduleAfterSharedFileChange(context: Context) {
+        val request = OneTimeWorkRequestBuilder<FolderAuditWorker>()
+            .setInitialDelay(2, TimeUnit.MINUTES)
+            .build()
+        WorkManager.getInstance(context).enqueueUniqueWork(
+            "ikar_download_change_audit",
+            ExistingWorkPolicy.REPLACE,
+            request
+        )
+    }
+
     fun disable(context: Context) {
         WorkManager.getInstance(context).cancelUniqueWork(UNIQUE_WORK)
+        WorkManager.getInstance(context).cancelUniqueWork("ikar_download_change_audit")
     }
 }
 
