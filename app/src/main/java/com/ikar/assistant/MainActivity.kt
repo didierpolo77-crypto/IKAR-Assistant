@@ -1239,8 +1239,10 @@ private fun IkarHome(
                             folderMonitoringEnabled = enabled
                             context.getSharedPreferences("ikar_security_center", android.content.Context.MODE_PRIVATE)
                                 .edit().putBoolean("folder_monitoring_enabled", enabled).apply()
-                            if (enabled) FolderAuditScheduler.enable(context)
-                            else FolderAuditScheduler.disable(context)
+                            if (enabled) {
+                                FolderAuditScheduler.enable(context)
+                                FolderAuditScheduler.runNow(context)
+                            } else FolderAuditScheduler.disable(context)
                             scope.launch {
                                 withContext(Dispatchers.IO) {
                                     memoryDao.insert(MemoryEntry(type = "SECURITY_EVENT", content = if (enabled) "Surveillance périodique du dossier activée avec autorisation." else "Surveillance périodique du dossier désactivée."))
