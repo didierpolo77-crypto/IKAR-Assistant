@@ -64,13 +64,16 @@ object DownloadedFileScanner {
                         scanned++
                         prefs.edit().putString(uriKey, signature).apply()
                         if (report.verdict != CLEAN_VERDICT) {
-                            flagged += "$name — \${report.verdict}"
+                            flagged += "$name — ${report.verdict}"
                         }
-                        if (report.engines.any { it.contains("Moteur Kotlin YARA-compatible") }) limited++
+                        if (report.engines.any { it.contains("Moteur Kotlin YARA-compatible") }) {
+                            limited++
+                            unscanned += "$name — couverture YARA limitée : libyara natif indisponible ; fichier non certifié sûr."
+                        }
                     } catch (error: Exception) {
                         scanned++
                         prefs.edit().putString(uriKey, "UNSCANNED:$signature").apply()
-                        unscanned += "$name — \${error.localizedMessage ?: error.javaClass.simpleName}"
+                        unscanned += "$name — ${error.localizedMessage ?: error.javaClass.simpleName}"
                     }
                 }
             }
