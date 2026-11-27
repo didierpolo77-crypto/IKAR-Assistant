@@ -81,6 +81,8 @@ import com.ikar.assistant.security.IkarSafeBrowserActivity
 import com.ikar.assistant.security.SecurityReport
 import com.ikar.assistant.security.FileScanner
 import com.ikar.assistant.security.DownloadedFileScanner
+import com.ikar.assistant.security.DownloadScanCandidate
+import com.ikar.assistant.security.DownloadScanSummary
 import com.ikar.assistant.security.FileQuarantineStore
 import com.ikar.assistant.security.AntivirusScanHistory
 import com.ikar.assistant.security.ClamAvEngineStatus
