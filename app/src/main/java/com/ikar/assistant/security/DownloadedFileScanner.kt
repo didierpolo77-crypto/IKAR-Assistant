@@ -24,7 +24,7 @@ object DownloadedFileScanner {
     private const val MAX_FILES_PER_RUN = 20
     private const val MAX_DEPTH = 8
     private const val SETTLE_DELAY_MS = 90_000L
-    private const val SCANNER_REVISION = "v2"
+    private const val SCANNER_REVISION = "v3"
     private const val CLEAN_VERDICT = "Aucun indicateur détecté par les règles locales disponibles"
 
     fun scanTree(context: Context, treeUri: Uri): DownloadScanSummary {
