@@ -356,9 +356,12 @@ class IkarSafeBrowserActivity : Activity() {
             "application/vnd.android.package-archive", "application/x-msdownload",
             "application/x-dosexec", "application/x-executable", "application/x-sh",
             "application/x-shellscript", "application/java-archive", "application/x-java-archive",
-            "application/x-sharedlib"
+            "application/x-sharedlib", "application/x-msdos-program",
+            "application/javascript", "application/ecmascript", "text/javascript", "text/vbscript"
         )
-        val isExecutable = extension in executableExtensions ||
+        val hiddenExecutableExtension = filename.lowercase().split('.').dropLast(1)
+            .any { it in executableExtensions }
+        val isExecutable = extension in executableExtensions || hiddenExecutableExtension ||
             normalizedMime in executableMimeTypes ||
             normalizedMime.startsWith("application/x-executable")
         if (isExecutable) {
@@ -375,7 +378,8 @@ class IkarSafeBrowserActivity : Activity() {
                 "application/zip", "application/x-7z-compressed", "application/vnd.rar",
                 "application/x-rar-compressed", "application/vnd.ms-word.document.macroenabled.12",
                 "application/vnd.ms-excel.sheet.macroenabled.12",
-                "application/vnd.ms-powerpoint.presentation.macroenabled.12"
+                "application/vnd.ms-powerpoint.presentation.macroenabled.12",
+                "application/octet-stream", "binary/octet-stream", "application/binary"
             )
         val proceed = { enqueueDownload(rawUrl, filename, userAgent, normalizedMime, contentLength) }
         if (isContainerOrMacro) {
