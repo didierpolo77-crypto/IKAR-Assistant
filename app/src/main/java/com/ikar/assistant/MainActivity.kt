@@ -1307,28 +1307,33 @@ private fun IkarHome(
                                                         expectedHash
                                                     )
                                                 }
-                                                quarantineItems = withContext(Dispatchers.IO) {
-                                                    FileQuarantineStore.list(context.applicationContext)
-                                                }
+                                                // Record the actual file outcome before refreshing ancillary UI state.
                                                 quarantineStatus = if (outcome.originalRemoved) {
                                                     "Copie chiffrée vérifiée et fichier original retiré du dossier partagé : ${outcome.item.name}."
                                                 } else {
                                                     "Copie chiffrée vérifiée et conservée, mais l'original n'a pas été retiré (droits SAF, fichier modifié ou suppression refusée). Il reste présent."
                                                 }
                                                 downloadScanStatus = quarantineStatus
-                                                withContext(Dispatchers.IO) {
-                                                    ActionAudit.record(
-                                                        memoryDao,
-                                                        "shared_download_quarantine",
-                                                        if (outcome.originalRemoved) "isolated" else "backup_only",
-                                                        "Fichier=${outcome.item.name}; SHA-256 exact MalwareBazaar; originalRemoved=${outcome.originalRemoved}"
-                                                    )
+                                                runCatching {
+                                                    quarantineItems = withContext(Dispatchers.IO) {
+                                                        FileQuarantineStore.list(context.applicationContext)
+                                                    }
+                                                }
+                                                runCatching {
+                                                    withContext(Dispatchers.IO) {
+                                                        ActionAudit.record(
+                                                            memoryDao,
+                                                            "shared_download_quarantine",
+                                                            if (outcome.originalRemoved) "isolated" else "backup_only",
+                                                            "Fichier=${outcome.item.name}; SHA-256 exact MalwareBazaar; originalRemoved=${outcome.originalRemoved}"
+                                                        )
+                                                    }
                                                 }
                                                 downloadScanSummary = downloadScanSummary?.copy(
                                                     candidates = downloadScanSummary?.candidates.orEmpty()
                                                         .filterNot { it.uri == candidate.uri }
                                                 )
-                                                refreshMemories()
+                                                runCatching { refreshMemories() }
                                             } catch (error: Exception) {
                                                 quarantineStatus = "Quarantaine interrompue : ${error.localizedMessage ?: error.javaClass.simpleName}. Le fichier original n'est pas volontairement supprimé."
                                                 downloadScanStatus = quarantineStatus
