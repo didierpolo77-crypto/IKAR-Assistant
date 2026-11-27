@@ -42,6 +42,7 @@ class IkarSafeBrowserActivity : Activity() {
     private var currentNavigationSafeBrowsing = false
     @Volatile private var privacyModeEnabled = true
     private val blockedTrackerRequests = AtomicInteger(0)
+    private val blockedThreatRequests = AtomicInteger(0)
     private lateinit var privacyButton: Button
 
     private val safeBrowsingTimeout = Runnable {
@@ -135,6 +136,12 @@ class IkarSafeBrowserActivity : Activity() {
                     // Re-check every top-level navigation, including redirects and clicked links.
                     if (request.isForMainFrame) {
                         val target = request.url.toString()
+                        val host = request.url.host.orEmpty()
+                        if (ThreatIntelStore.isKnownMaliciousHost(this@IkarSafeBrowserActivity, host)) {
+                            status.text = "Destination bloquée : domaine présent dans la base locale de menaces."
+                            Toast.makeText(this@IkarSafeBrowserActivity, "Domaine malveillant connu bloqué par IKAR.", Toast.LENGTH_LONG).show()
+                            return true
+                        }
                         val assessment = SecurityCenter.checkLink(target)
                         if (assessment.suspicious) {
                             AlertDialog.Builder(this@IkarSafeBrowserActivity)
@@ -153,6 +160,20 @@ class IkarSafeBrowserActivity : Activity() {
 
                 override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): android.webkit.WebResourceResponse? {
                     val host = request.url.host
+                    if (!request.isForMainFrame && !host.isNullOrBlank() &&
+                        ThreatIntelStore.isKnownMaliciousHost(this@IkarSafeBrowserActivity, host)
+                    ) {
+                        val total = blockedThreatRequests.incrementAndGet()
+                        mainHandler.post {
+                            if (!isFinishing && !isDestroyed) {
+                                status.text = "Web Shield · $total ressource(s) issue(s) d'un domaine malveillant bloquée(s)."
+                            }
+                        }
+                        return android.webkit.WebResourceResponse(
+                            "text/plain", "UTF-8", 403, "Blocked by IKAR", emptyMap(),
+                            ByteArrayInputStream(ByteArray(0))
+                        )
+                    }
                     if (privacyModeEnabled && !request.isForMainFrame && IkarTrackerBlocklist.isTrackerHost(host)) {
                         val total = blockedTrackerRequests.incrementAndGet()
                         mainHandler.post {
@@ -328,6 +349,12 @@ class IkarSafeBrowserActivity : Activity() {
             return
         }
         address.setText(normalized)
+        val parsedHost = uri.host.orEmpty()
+        if (ThreatIntelStore.isKnownMaliciousHost(this, parsedHost)) {
+            status.text = "Web Shield : ce domaine figure dans la base locale de menaces. Navigation bloquée."
+            Toast.makeText(this, "Domaine malveillant connu bloqué par IKAR.", Toast.LENGTH_LONG).show()
+            return
+        }
         val localAssessment = SecurityCenter.checkLink(normalized)
         if (localAssessment.suspicious) {
             status.text = "Lien à vérifier · navigation suspendue en attendant ton accord."
