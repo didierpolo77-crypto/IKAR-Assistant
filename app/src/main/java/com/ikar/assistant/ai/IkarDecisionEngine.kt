@@ -20,6 +20,9 @@ object IkarDecisionEngine {
         if (q.isBlank()) return null
 
         return when {
+            hasAny(q, "etat de la protection", "etat de tes fonctionnalites", "quelles fonctionnalites fonctionnent", "fonctionnalites disponibles", "etat des protections") ->
+                Decision("État des fonctionnalités", "réponse locale prudente", "Je peux répondre avec mes règles locales même si le fournisseur IA est indisponible. En revanche, je ne dois pas prétendre que toutes les protections sont actives sans effectuer leurs diagnostics. Vérifie séparément les états affichés dans les onglets Sécurité, Protection Web, Appareil et Outils. Les fonctions qui nécessitent Internet ou une autorisation Android peuvent être indisponibles tant que leur configuration n'est pas terminée.")
+
             hasAny(q, "ransomware", "rancon", "fichiers bloques", "fichiers chiffres", "fichiers renommes") ->
                 Decision("Ransomware", "correspondance forte", "Je vais t'aider à limiter les dégâts. Si tu soupçonnes un ransomware : 1) coupe temporairement le Wi-Fi et les données mobiles ; 2) n'ouvre pas les fichiers touchés et ne branche aucun autre appareil ; 3) ne paie pas et ne supprime pas les preuves ; 4) conserve les noms et messages affichés. IKAR peut comparer les changements dans le dossier que tu as autorisé, mais cette vérification ne prouve pas à elle seule une infection. Veux-tu lancer une analyse du dossier autorisé ?")
 

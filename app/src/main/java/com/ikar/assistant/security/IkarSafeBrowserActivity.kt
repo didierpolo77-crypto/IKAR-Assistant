@@ -2,13 +2,21 @@ package com.ikar.assistant.security
 
 import android.app.Activity
 import android.app.AlertDialog
+import android.app.DownloadManager
+import android.content.Context
+import android.os.Environment
 import android.annotation.SuppressLint
 import android.graphics.Color
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.view.ViewGroup
 import android.webkit.SafeBrowsingResponse
+import android.webkit.CookieManager
+import android.webkit.WebChromeClient
+import android.webkit.PermissionRequest
 import android.webkit.SslErrorHandler
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
@@ -19,6 +27,8 @@ import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
+import java.io.ByteArrayInputStream
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * Lightweight in-app browser. Uses Android WebView Safe Browsing for URLs
@@ -28,6 +38,23 @@ class IkarSafeBrowserActivity : Activity() {
     private lateinit var browser: WebView
     private lateinit var address: EditText
     private lateinit var status: TextView
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private var safeBrowsingReady: Boolean? = null
+    private var pendingInitialUrl: String? = null
+    private var initialNavigationStarted = false
+    private var currentNavigationSafeBrowsing = false
+    @Volatile private var privacyModeEnabled = true
+    private val blockedTrackerRequests = AtomicInteger(0)
+    private val blockedThreatRequests = AtomicInteger(0)
+    private lateinit var privacyButton: Button
+
+    private val safeBrowsingTimeout = Runnable {
+        if (!initialNavigationStarted && !isFinishing && !isDestroyed) {
+            safeBrowsingReady = false
+            status.text = "Safe Browsing n'a pas répondu à temps · ouverture avec contrôles locaux uniquement."
+            startInitialNavigation()
+        }
+    }
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -60,6 +87,19 @@ class IkarSafeBrowserActivity : Activity() {
         }
         controls.addView(address)
         controls.addView(open)
+        privacyButton = Button(this).apply {
+            text = "Confidentialité : activée"
+            setOnClickListener {
+                privacyModeEnabled = !privacyModeEnabled
+                applyPrivacySettings()
+                text = if (privacyModeEnabled) "Confidentialité : activée" else "Confidentialité : standard"
+                status.text = if (privacyModeEnabled) {
+                    "Protection vie privée active : cookies tiers bloqués, pisteurs connus filtrés, géolocalisation refusée, cache désactivé. Ce mode ne masque pas ton adresse IP."
+                } else {
+                    "Mode standard : les cookies tiers peuvent être acceptés. La géolocalisation reste refusée."
+                }
+            }
+        }
         status = TextView(this).apply {
             text = "Initialisation de la protection Web…"
             textSize = 12f
@@ -73,15 +113,134 @@ class IkarSafeBrowserActivity : Activity() {
             settings.allowFileAccess = false
             settings.allowContentAccess = false
             settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_NEVER_ALLOW
+            settings.setGeolocationEnabled(false)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 settings.safeBrowsingEnabled = true
+            }
+            webChromeClient = object : WebChromeClient() {
+                override fun onGeolocationPermissionsShowPrompt(
+                    origin: String,
+                    callback: android.webkit.GeolocationPermissions.Callback
+                ) {
+                    callback.invoke(origin, false, false)
+                }
+
+                override fun onPermissionRequest(request: PermissionRequest) {
+                    request.deny()
+                }
             }
             webViewClient = object : WebViewClient() {
                 override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                     val scheme = request.url.scheme?.lowercase()
-                    if (scheme == "http" || scheme == "https") return false
-                    Toast.makeText(this@IkarSafeBrowserActivity, "Protocole bloqué par IKAR.", Toast.LENGTH_SHORT).show()
-                    return true
+                    if (scheme != "https") {
+                        Toast.makeText(this@IkarSafeBrowserActivity, "Protocole bloqué par IKAR.", Toast.LENGTH_SHORT).show()
+                        return true
+                    }
+                    // Re-check every top-level navigation, including redirects and clicked links.
+                    if (request.isForMainFrame) {
+                        val target = request.url.toString()
+                        val host = normalizeHost(request.url.host.orEmpty())
+                        if (host == null || isIpLiteralHost(host) ||
+                            runCatching { ThreatIntelStore.isKnownMaliciousHost(this@IkarSafeBrowserActivity, host) }.getOrDefault(false)
+                        ) {
+                            status.text = "Destination bloquée : domaine invalide, IP directe ou menace connue."
+                            Toast.makeText(this@IkarSafeBrowserActivity, "Domaine malveillant connu bloqué par IKAR.", Toast.LENGTH_LONG).show()
+                            return true
+                        }
+                        val assessment = SecurityCenter.checkLink(target)
+                        if (assessment.suspicious) {
+                            AlertDialog.Builder(this@IkarSafeBrowserActivity)
+                                .setTitle("Navigation bloquée par le mode strict")
+                                .setMessage(assessment.reasons.joinToString("\n\n") +
+                                    "\n\nLe mode strict bloque les destinations présentant des signaux de risque.")
+                                .setPositiveButton("Compris", null)
+                                .show()
+                            status.text = "Navigation suspendue : destination à vérifier."
+                            return true
+                        }
+                    }
+                    return false
+                }
+
+                override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): android.webkit.WebResourceResponse? {
+                    val host = normalizeHost(request.url.host.orEmpty())
+                    if (!request.isForMainFrame && (host == null || isIpLiteralHost(host) ||
+                        runCatching { ThreatIntelStore.isKnownMaliciousHost(this@IkarSafeBrowserActivity, host) }.getOrDefault(false))
+                    ) {
+                        val total = blockedThreatRequests.incrementAndGet()
+                        mainHandler.post {
+                            if (!isFinishing && !isDestroyed) {
+                                status.text = "Web Shield · $total ressource(s) issue(s) d'un domaine malveillant bloquée(s)."
+                            }
+                        }
+                        return android.webkit.WebResourceResponse(
+                            "text/plain", "UTF-8", 403, "Blocked by IKAR", emptyMap(),
+                            ByteArrayInputStream(ByteArray(0))
+                        )
+                    }
+                    if (privacyModeEnabled && !request.isForMainFrame && IkarTrackerBlocklist.isTrackerHost(host)) {
+                        val total = blockedTrackerRequests.incrementAndGet()
+                        mainHandler.post {
+                            if (!isFinishing && !isDestroyed) {
+                                status.text = "Confidentialité active · $total requête(s) de pistage bloquée(s) dans cette session."
+                            }
+                        }
+                        return android.webkit.WebResourceResponse(
+                            "text/plain",
+                            "UTF-8",
+                            204,
+                            "No Content",
+                            emptyMap(),
+                            ByteArrayInputStream(ByteArray(0))
+                        )
+                    }
+                    return super.shouldInterceptRequest(view, request)
+                }
+
+                override fun onPageStarted(view: WebView, url: String?, favicon: android.graphics.Bitmap?) {
+                    currentNavigationSafeBrowsing = safeBrowsingReady == true
+                    status.text = if (currentNavigationSafeBrowsing) {
+                        "Chargement · Safe Browsing Android activé."
+                    } else {
+                        "Chargement · Safe Browsing non confirmé, prudence renforcée."
+                    }
+                }
+
+                override fun onPageFinished(view: WebView, url: String?) {
+                    if (!url.isNullOrBlank()) {
+                        address.setText(url)
+                        val trackerCount = blockedTrackerRequests.get()
+                        val trackerSummary = if (privacyModeEnabled && trackerCount > 0) {
+                            " · $trackerCount requête(s) de pistage bloquée(s) dans cette session."
+                        } else {
+                            ""
+                        }
+                        status.text = (if (currentNavigationSafeBrowsing) {
+                            "Page chargée · Safe Browsing Android activé pour cette navigation."
+                        } else {
+                            "Page chargée · Safe Browsing non confirmé pour cette navigation ; contrôles locaux heuristiques uniquement."
+                        }) + trackerSummary
+                    }
+                }
+
+                override fun onReceivedError(
+                    view: WebView,
+                    request: WebResourceRequest,
+                    error: android.webkit.WebResourceError
+                ) {
+                    if (request.isForMainFrame) {
+                        status.text = "Échec du chargement : ${error.description}. Vérifie Internet ou l'adresse."
+                    }
+                }
+
+                override fun onReceivedHttpError(
+                    view: WebView,
+                    request: WebResourceRequest,
+                    errorResponse: android.webkit.WebResourceResponse
+                ) {
+                    if (request.isForMainFrame) {
+                        status.text = "Le site a répondu HTTP ${errorResponse.statusCode}."
+                    }
                 }
 
                 override fun onReceivedSslError(view: WebView, handler: SslErrorHandler, error: SslError) {
@@ -106,9 +265,18 @@ class IkarSafeBrowserActivity : Activity() {
         }
         root.addView(heading)
         root.addView(controls)
+        root.addView(privacyButton)
         root.addView(status)
         root.addView(browser)
+        browser.setDownloadListener { url, userAgent, contentDisposition, mimeType, contentLength ->
+            handleDownload(url, userAgent, contentDisposition, mimeType, contentLength)
+        }
         setContentView(root)
+        privacyModeEnabled = getSharedPreferences("ikar_browser_privacy", MODE_PRIVATE)
+            .getBoolean("privacy_mode_enabled", true)
+        applyPrivacySettings()
+        privacyButton.text = if (privacyModeEnabled) "Confidentialité : activée" else "Confidentialité : standard"
+        status.text = "Confidentialité active : cookies tiers bloqués, pisteurs connus filtrés, géolocalisation refusée. Ton adresse IP reste visible aux sites."
 
         val incoming = intent?.data
         val initial = incoming?.toString()
@@ -117,25 +285,187 @@ class IkarSafeBrowserActivity : Activity() {
         address.setText(initial)
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+            pendingInitialUrl = initial
+            status.text = "Initialisation de Safe Browsing · navigation en attente."
+            // Do not load the first page before WebView reports whether Safe Browsing
+            // initialized. If the provider never calls back, continue after a timeout
+            // with an explicit warning rather than silently claiming protection.
+            mainHandler.postDelayed(safeBrowsingTimeout, 4_000L)
             WebView.startSafeBrowsing(applicationContext) { ready ->
                 runOnUiThread {
-                    status.text = if (ready) {
-                        "Safe Browsing Android activé · menaces connues vérifiées"
-                    } else {
-                        "Safe Browsing indisponible · prudence renforcée"
+                    if (!isFinishing && !isDestroyed) {
+                        mainHandler.removeCallbacks(safeBrowsingTimeout)
+                        safeBrowsingReady = ready
+                        if (ready) {
+                            status.text = "Safe Browsing Android activé."
+                        } else {
+                            status.text = "Safe Browsing indisponible · contrôles locaux uniquement."
+                        }
+                        startInitialNavigation()
                     }
-                    // Keep navigation available when Android Safe Browsing cannot initialize,
-                    // but state the limitation explicitly instead of claiming full protection.
-                    loadAddress(initial)
                 }
             }
         } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            status.text = "Safe Browsing WebView activé · protection selon la version Android"
+            safeBrowsingReady = null
+            status.text = "Safe Browsing WebView configuré selon le fournisseur Android ; activation non vérifiable ici."
             loadAddress(initial)
         } else {
-            status.text = "Protection Web avancée indisponible sur cette version Android."
+            safeBrowsingReady = false
+            status.text = "Protection Safe Browsing indisponible sur cette version Android."
             loadAddress(initial)
         }
+    }
+
+    /**
+     * Blocks known malicious destinations and executable/script payloads.
+     * Archives and macro-enabled Office documents require explicit confirmation.
+     * Other files use Android DownloadManager; this is not an antivirus scan.
+     */
+    private fun normalizeHost(rawHost: String): String? =
+        runCatching {
+            java.net.IDN.toASCII(rawHost.trim().trimEnd('.'), java.net.IDN.USE_STD3_ASCII_RULES)
+                .lowercase().takeIf { it.isNotBlank() && it.length <= 253 }
+        }.getOrNull()
+
+    private fun isIpLiteralHost(host: String): Boolean =
+        host.contains(':') || host.matches(Regex("""\d{1,3}(?:\.\d{1,3}){3}"""))
+
+    private fun handleDownload(rawUrl: String, userAgent: String?, contentDisposition: String?, mimeType: String?, contentLength: Long) {
+        val downloadUri = runCatching { Uri.parse(rawUrl) }.getOrNull()
+        val scheme = downloadUri?.scheme?.lowercase()
+        val rawHost = downloadUri?.host.orEmpty()
+        if (downloadUri == null || rawHost.isBlank() || scheme != "https" ||
+            downloadUri.encodedAuthority?.contains("@") == true
+        ) {
+            status.text = "Téléchargement bloqué : URL invalide ou connexion non HTTPS."
+            Toast.makeText(this, "IKAR bloque ce téléchargement non sécurisé.", Toast.LENGTH_LONG).show()
+            return
+        }
+        val host = runCatching { java.net.IDN.toASCII(rawHost.trimEnd('.'), java.net.IDN.USE_STD3_ASCII_RULES).lowercase() }.getOrDefault("")
+        val threatMatch = runCatching {
+            ThreatIntelStore.isKnownMaliciousHost(this, host) ||
+                ThreatIntelStore.isKnownMalicious(this, rawUrl)
+        }.getOrDefault(false)
+        if (host.isBlank() || isIpLiteralHost(host) || threatMatch) {
+            status.text = "Téléchargement bloqué : domaine répertorié comme malveillant."
+            Toast.makeText(this, "Web Shield a bloqué le téléchargement.", Toast.LENGTH_LONG).show()
+            return
+        }
+        val assessment = SecurityCenter.checkLink(rawUrl)
+        if (assessment.suspicious) {
+            status.text = "Téléchargement bloqué : l'URL présente des signaux suspects."
+            AlertDialog.Builder(this).setTitle("Téléchargement bloqué par Web Shield")
+                .setMessage(assessment.reasons.joinToString("\n\n") + "\n\nIKAR refuse ce téléchargement car sa destination présente des signaux de risque.")
+                .setPositiveButton("Compris", null).show()
+            return
+        }
+        val filename = extractDownloadFilename(contentDisposition, downloadUri)
+        val extension = filename.substringAfterLast('.', "").lowercase()
+        val normalizedMime = mimeType.orEmpty().substringBefore(';').trim().lowercase()
+        val executableExtensions = setOf(
+            "apk", "xapk", "apks", "aab", "exe", "msi", "msp", "com", "scr", "pif",
+            "dll", "so", "dylib", "dmg", "pkg", "deb", "rpm", "jar", "class", "dex",
+            "sh", "bash", "zsh", "bat", "cmd", "ps1", "psm1", "vbs", "vbe", "js",
+            "jse", "hta", "wsf", "wsh", "reg", "lnk"
+        )
+        val executableMimeTypes = setOf(
+            "application/vnd.android.package-archive", "application/x-msdownload",
+            "application/x-dosexec", "application/x-executable", "application/x-sh",
+            "application/x-shellscript", "application/java-archive", "application/x-java-archive",
+            "application/x-sharedlib", "application/x-msdos-program",
+            "application/javascript", "application/ecmascript", "text/javascript", "text/vbscript"
+        )
+        val hiddenExecutableExtension = filename.lowercase().split('.').dropLast(1)
+            .any { it in executableExtensions }
+        val isExecutable = extension in executableExtensions || hiddenExecutableExtension ||
+            normalizedMime in executableMimeTypes ||
+            normalizedMime.startsWith("application/x-executable")
+        if (isExecutable) {
+            status.text = "Téléchargement bloqué : fichier exécutable ou script à haut risque ($filename)."
+            AlertDialog.Builder(this).setTitle("Fichier dangereux bloqué")
+                .setMessage("IKAR a bloqué « $filename » ($normalizedMime). Les applications, exécutables, bibliothèques et scripts peuvent installer du code ou compromettre l'appareil. Ce blocage est préventif ; aucune analyse antivirus complète du fichier n'a été effectuée.")
+                .setPositiveButton("Fermer", null).show()
+            return
+        }
+        val archiveExtensions = setOf("zip", "rar", "7z", "tar", "gz", "bz2", "xz", "iso", "img")
+        val macroExtensions = setOf("docm", "xlsm", "pptm", "dotm", "xltm", "potm")
+        val unknownOrOpaqueType = extension.isBlank() || normalizedMime.isBlank() ||
+            normalizedMime in setOf("application/octet-stream", "binary/octet-stream", "application/binary")
+        val isContainerOrMacro = extension in archiveExtensions || extension in macroExtensions ||
+            unknownOrOpaqueType || normalizedMime in setOf(
+                "application/zip", "application/x-7z-compressed", "application/vnd.rar",
+                "application/x-rar-compressed", "application/vnd.ms-word.document.macroenabled.12",
+                "application/vnd.ms-excel.sheet.macroenabled.12",
+                "application/vnd.ms-powerpoint.presentation.macroenabled.12"
+            )
+        val proceed = { enqueueDownload(rawUrl, filename, userAgent, normalizedMime, contentLength) }
+        if (isContainerOrMacro) {
+            AlertDialog.Builder(this).setTitle("Fichier à examiner avec prudence")
+                .setMessage("« $filename » est une archive, un document à macros ou un fichier dont le type n'est pas clairement identifié. IKAR ne peut pas inspecter son contenu avant téléchargement. Ne l'ouvre pas si tu ne connais pas sa provenance.\n\nContinuer le téléchargement ?")
+                .setNegativeButton("Bloquer", null)
+                .setPositiveButton("Télécharger") { _, _ -> proceed() }.show()
+        } else proceed()
+    }
+
+    private fun extractDownloadFilename(contentDisposition: String?, uri: Uri): String {
+        val dispositionName = contentDisposition?.let {
+            Regex("""filename\*?=(?:UTF-8''|")?([^";]+)""", RegexOption.IGNORE_CASE)
+                .find(it)?.groupValues?.getOrNull(1)
+        }?.let { Uri.decode(it.trim().trim('"')) }
+        val candidate = dispositionName ?: uri.lastPathSegment?.let(Uri::decode) ?: "ikar-download"
+        val safe = candidate.replace(Regex("""[\\/:*?"<>|\u0000-\u001F]"""), "_")
+            .trim().trimEnd('.').take(120)
+        return safe.ifBlank { "ikar-download" }
+    }
+
+    private fun enqueueDownload(url: String, filename: String, userAgent: String?, mimeType: String, contentLength: Long) {
+        runCatching {
+            val request = DownloadManager.Request(Uri.parse(url)).apply {
+                setTitle(filename)
+                setDescription("Téléchargement demandé depuis le navigateur IKAR")
+                setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) setAllowedOverMetered(true)
+                setAllowedOverRoaming(false)
+                setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, filename)
+                if (mimeType.isNotBlank()) setMimeType(mimeType)
+                if (!userAgent.isNullOrBlank()) addRequestHeader("User-Agent", userAgent)
+                CookieManager.getInstance().getCookie(url)?.takeIf { it.isNotBlank() }?.let {
+                    addRequestHeader("Cookie", it)
+                }
+            }
+            (getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager).enqueue(request)
+        }.onSuccess {
+            val sizeText = if (contentLength > 0L) " Taille annoncée : ${contentLength / 1024} Ko." else ""
+            status.text = "Téléchargement lancé : $filename.$sizeText Fichier non encore analysé par l'antivirus IKAR."
+            Toast.makeText(this, "Téléchargement lancé. Analyse antivirus non effectuée.", Toast.LENGTH_LONG).show()
+        }.onFailure { error ->
+            status.text = "Téléchargement impossible : ${error.localizedMessage ?: "erreur Android"}."
+        }
+    }
+
+    private fun applyPrivacySettings() {
+        if (!::browser.isInitialized) return
+        CookieManager.getInstance().setAcceptCookie(true)
+        browser.settings.javaScriptCanOpenWindowsAutomatically = false
+        browser.settings.setSupportMultipleWindows(false)
+        browser.settings.saveFormData = false
+        CookieManager.getInstance().setAcceptThirdPartyCookies(browser, !privacyModeEnabled)
+        browser.settings.cacheMode = if (privacyModeEnabled) {
+            android.webkit.WebSettings.LOAD_NO_CACHE
+        } else {
+            android.webkit.WebSettings.LOAD_DEFAULT
+        }
+        getSharedPreferences("ikar_browser_privacy", MODE_PRIVATE).edit()
+            .putBoolean("privacy_mode_enabled", privacyModeEnabled)
+            .apply()
+    }
+
+    private fun startInitialNavigation() {
+        if (initialNavigationStarted || isFinishing || isDestroyed) return
+        initialNavigationStarted = true
+        val initial = pendingInitialUrl
+        pendingInitialUrl = null
+        if (initial != null) loadAddress(initial)
     }
 
     private fun loadAddress(raw: String) {
@@ -147,27 +477,39 @@ class IkarSafeBrowserActivity : Activity() {
         }
         val uri = runCatching { Uri.parse(normalized) }.getOrNull()
         if (uri == null || uri.host.isNullOrBlank() ||
-            uri.scheme?.lowercase() !in setOf("http", "https")
+            uri.scheme?.lowercase() != "https" || uri.encodedAuthority?.contains("@") == true
         ) {
-            status.text = "Adresse invalide : seuls HTTP et HTTPS sont acceptés."
+            status.text = "Adresse bloquée : HTTPS valide obligatoire, sans identifiants intégrés dans l'URL."
             return
         }
         address.setText(normalized)
+        val parsedHost = normalizeHost(uri.host.orEmpty())
+        if (parsedHost == null || isIpLiteralHost(parsedHost) ||
+            runCatching { ThreatIntelStore.isKnownMaliciousHost(this, parsedHost) }.getOrDefault(false)
+        ) {
+            status.text = "Web Shield : domaine invalide, IP directe ou menace connue. Navigation bloquée."
+            Toast.makeText(this, "Domaine malveillant connu bloqué par IKAR.", Toast.LENGTH_LONG).show()
+            return
+        }
+        if (safeBrowsingReady != true) {
+            status.text = "Navigation bloquée : Safe Browsing Android n'a pas pu être confirmé. Le mode strict refuse d'ouvrir la page sans cette vérification."
+            return
+        }
         val localAssessment = SecurityCenter.checkLink(normalized)
         if (localAssessment.suspicious) {
             status.text = "Lien à vérifier · navigation suspendue en attendant ton accord."
             AlertDialog.Builder(this)
-                .setTitle("Vérification de sécurité")
+                .setTitle("Navigation bloquée par le mode strict")
                 .setMessage(localAssessment.reasons.joinToString("\n\n") +
-                    "\n\nIKAR ne peut pas confirmer à lui seul qu'un lien est malveillant. Veux-tu quand même l'ouvrir ?")
-                .setNegativeButton("Retour", null)
-                .setPositiveButton("Continuer") { _, _ ->
-                    status.text = "Ouverture avec avertissement · Safe Browsing Android en complément."
-                    browser.loadUrl(normalized)
-                }
+                    "\n\nLe mode strict bloque les destinations présentant des signaux de risque.")
+                .setPositiveButton("Compris", null)
                 .show()
         } else {
-            status.text = "Aucun signal heuristique local évident · contrôle Safe Browsing en complément."
+            status.text = if (safeBrowsingReady == true) {
+                "Aucun signal heuristique local évident · Safe Browsing Android en complément."
+            } else {
+                "Aucun signal heuristique local évident · Safe Browsing non confirmé."
+            }
             browser.loadUrl(normalized)
         }
     }
@@ -178,8 +520,18 @@ class IkarSafeBrowserActivity : Activity() {
     }
 
     override fun onDestroy() {
+        mainHandler.removeCallbacks(safeBrowsingTimeout)
         if (::browser.isInitialized) {
             browser.stopLoading()
+            if (privacyModeEnabled) {
+                // Clear this app's WebView browsing state on exit; this also signs out
+                // of sites opened in this WebView and is intentionally disclosed.
+                browser.clearHistory()
+                browser.clearCache(true)
+                CookieManager.getInstance().removeAllCookies(null)
+                CookieManager.getInstance().flush()
+                android.webkit.WebStorage.getInstance().deleteAllData()
+            }
             browser.destroy()
         }
         super.onDestroy()

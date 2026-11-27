@@ -207,6 +207,7 @@ class YaraForgeUpdateWorker(
                     if (directoryName.startsWith("/") || directoryName.split('/').any { it == ".." || it.isBlank() }) {
                         throw java.io.IOException("Chemin dangereux dans l'archive")
                     }
+                    expandedBytes = drainEntry(zip, expandedBytes)
                     zip.closeEntry()
                     continue
                 }
@@ -217,7 +218,11 @@ class YaraForgeUpdateWorker(
                 val baseName = rawName.substringAfterLast('/').uppercase(Locale.ROOT)
                 val accepted = extension in setOf("yar", "yara", "inc", "txt", "md", "json", "yml", "yaml", "license", "licence", "toml") ||
                     baseName in setOf("LICENSE", "COPYING", "NOTICE", "AUTHORS")
-                if (!accepted) { zip.closeEntry(); continue }
+                if (!accepted) {
+                    expandedBytes = drainEntry(zip, expandedBytes)
+                    zip.closeEntry()
+                    continue
+                }
                 val target = File(destination, rawName)
                 target.parentFile?.mkdirs()
                 if (!target.canonicalPath.startsWith(rootPath)) throw java.io.IOException("Sortie d'archive hors dossier")
@@ -240,6 +245,21 @@ class YaraForgeUpdateWorker(
             }
         }
         return ruleFiles
+    }
+
+    /** Count decompressed bytes even for ignored ZIP entries to prevent hidden ZIP bombs. */
+    private fun drainEntry(zip: ZipInputStream, currentExpandedBytes: Long): Long {
+        var total = currentExpandedBytes
+        val buffer = ByteArray(8192)
+        while (true) {
+            val count = zip.read(buffer)
+            if (count < 0) break
+            total += count
+            if (total > MAX_EXPANDED_BYTES) {
+                throw java.io.IOException("Archive YARA Forge décompressée trop volumineuse")
+            }
+        }
+        return total
     }
 
     private fun sha256(bytes: ByteArray): String =

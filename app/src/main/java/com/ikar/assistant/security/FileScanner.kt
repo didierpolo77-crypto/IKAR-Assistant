@@ -21,7 +21,8 @@ data class FileScanReport(
     val indicators: List<String>,
     val verdict: String,
     val updateAssessment: String? = null,
-    val malwareBazaar: MalwareBazaarReport? = null
+    val malwareBazaar: MalwareBazaarReport? = null,
+    val engines: List<String> = emptyList()
 )
 
 /**
@@ -29,6 +30,9 @@ data class FileScanReport(
  * A hash is an identifier, not a malware verdict. Heuristics are indicators only.
  */
 object FileScanner {
+    // Protect the 32-bit device and cache storage from unexpectedly huge documents.
+    // This is a scan-size safety bound, not a malware-database row limit.
+    private const val MAX_SCAN_BYTES = 512L * 1024L * 1024L
 
     private val sensitivePermissions = mapOf(
         "android.permission.RECORD_AUDIO" to "Microphone",
@@ -43,13 +47,22 @@ object FileScanner {
         "android.permission.READ_PHONE_STATE" to "État du téléphone"
     )
 
-    fun scan(context: Context, uri: Uri): FileScanReport {
+    fun scan(context: Context, uri: Uri, enrichOnline: Boolean = true): FileScanReport {
         val resolver = context.contentResolver
         val name = resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
             ?.use { cursor ->
                 if (cursor.moveToFirst()) cursor.getString(0) else null
             } ?: "fichier sélectionné"
 
+        val declaredSize = resolver.query(uri, arrayOf(OpenableColumns.SIZE), null, null, null)
+            ?.use { cursor -> if (cursor.moveToFirst()) cursor.getLong(0).takeIf { it >= 0 } else null }
+        if (declaredSize != null && declaredSize > MAX_SCAN_BYTES) {
+            throw IllegalArgumentException("Fichier trop volumineux pour une analyse sûre sur cet appareil (limite 512 Mo).")
+        }
+        val usableBytes = context.cacheDir.usableSpace
+        if (declaredSize != null && usableBytes < declaredSize + 8L * 1024L * 1024L) {
+            throw IllegalStateException("Espace temporaire insuffisant pour analyser ce fichier en sécurité.")
+        }
         val temp = File.createTempFile("ikar_scan_", ".bin", context.cacheDir)
         try {
             var total = 0L
@@ -61,6 +74,12 @@ object FileScanner {
                         val count = input.read(buffer)
                         if (count < 0) break
                         total += count
+                        if (total > MAX_SCAN_BYTES) {
+                            throw IllegalArgumentException("Fichier trop volumineux pour une analyse sûre sur cet appareil (limite 512 Mo).")
+                        }
+                        if (context.cacheDir.usableSpace < 8L * 1024L * 1024L) {
+                            throw IllegalStateException("Espace temporaire insuffisant : analyse interrompue pour protéger le stockage.")
+                        }
                         digest.update(buffer, 0, count)
                         output.write(buffer, 0, count)
                     }
@@ -99,7 +118,7 @@ object FileScanner {
                 indicators += "Règle YARA locale ${match.rule} : ${match.detail}"
             }
             // Enrich local YARA/hash results with MalwareBazaar metadata. Only hashes and rule names leave the device.
-            val malwareBazaar = MalwareBazaarClient.enrich(context, hash, yaraMatches.map { it.rule })
+            val malwareBazaar = if (enrichOnline) MalwareBazaarClient.enrich(context, hash, yaraMatches.map { it.rule }) else null
             if (malwareBazaar?.exactHashMatch == true) {
                 indicators += "Empreinte SHA-256 confirmée dans MalwareBazaar${malwareBazaar.family?.let { " : famille $it" } ?: ""}."
             } else if (malwareBazaar?.relatedRuleFamilies?.isNotEmpty() == true) {
@@ -171,7 +190,7 @@ object FileScanner {
                 add("SHA-256")
                 add(when {
                     usingOfficialYara -> "libyara 4.5.0 officiel ARMv7 exécuté (${yaraMatches.size} règle(s) déclenchée(s))"
-                    else -> "Moteur Kotlin YARA-compatible (sous-ensemble, lecture en flux) exécuté (${yaraMatches.size} règle(s)); libyara indisponible : ${nativeYara.error ?: "raison inconnue"}"
+                    else -> "Moteur Kotlin YARA-compatible (sous-ensemble, lecture en flux) exécuté (${yaraMatches.size} règle(s)); seules les règles intégrées sont analysées : YARA Forge nécessite libyara natif. Libyara indisponible : ${nativeYara.error ?: "raison inconnue"}"
                 })
                 add("URLhaus SHA-256 (${if (ThreatIntelStore.hashCount(context) > 0) "base présente" else "base absente"})")
                 add("ClamAV : ${clamAvStatus.detail}")
@@ -196,7 +215,8 @@ object FileScanner {
                 indicators = indicators,
                 verdict = verdict,
                 updateAssessment = updateAssessment,
-                malwareBazaar = malwareBazaar
+                malwareBazaar = malwareBazaar,
+                engines = engines
             )
         } finally {
             temp.delete()

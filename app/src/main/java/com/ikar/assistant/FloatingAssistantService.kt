@@ -33,6 +33,12 @@ import android.widget.TextView
 import androidx.core.app.NotificationCompat
 import androidx.room.Room
 import com.ikar.assistant.ai.OfflineChatEngine
+import com.ikar.assistant.ai.ConversationTurn
+import com.ikar.assistant.ai.IkarCredentialStore
+import com.ikar.assistant.ai.IkarOnlineModelGateway
+import com.ikar.assistant.ai.IkarOrchestrator
+import com.ikar.assistant.ai.MemoryCommandParser
+import com.ikar.assistant.ai.WebResearch
 import com.ikar.assistant.data.MemoryDatabase
 import com.ikar.assistant.data.MemoryEntry
 import kotlinx.coroutines.CoroutineScope
@@ -314,18 +320,75 @@ class FloatingAssistantService : Service() {
                 scroll.post { scroll.fullScroll(View.FOCUS_DOWN) }
                 send.isEnabled = false
                 serviceScope.launch {
-                    val reply = withContext(Dispatchers.IO) {
+                    try {
+                        val reply = withContext(Dispatchers.IO) {
                         val dao = MemoryDatabase.getInstance(applicationContext).memoryDao()
+                        val previousEntries = dao.getAll()
+                        val history = previousEntries
+                            .filter { it.type == "USER_MESSAGE" || it.type == "ASSISTANT_MESSAGE" }
+                            .sortedBy { it.createdAt }
+                            .takeLast(10)
+                            .map {
+                                ConversationTurn(
+                                    role = if (it.type == "USER_MESSAGE") "user" else "assistant",
+                                    content = it.content
+                                )
+                            }
                         dao.insert(MemoryEntry(type = "USER_MESSAGE", content = question))
-                        val answer = OfflineChatEngine.answer(question, dao.getAll())
+                        val savedEntries = dao.getAll()
+                        val connectedMode = getSharedPreferences("ikar_runtime_settings", MODE_PRIVATE)
+                            .getBoolean("connected_mode", false)
+                        val route = IkarOrchestrator.plan(
+                            question = question,
+                            connectedMode = connectedMode,
+                            shareRelevantMemory = false,
+                            hasRelevantMemory = false
+                        )
+                        val answer = when (route.destination) {
+                            IkarOrchestrator.Destination.REMEMBER_LOCALLY -> {
+                                val fact = MemoryCommandParser.extract(question)
+                                    ?: throw IllegalStateException("Instruction de mémorisation non reconnue.")
+                                val alreadySaved = savedEntries.any {
+                                    it.type == "NOTE" && MemoryCommandParser.sameFact(it.content, fact)
+                                }
+                                if (!alreadySaved) {
+                                    dao.insert(MemoryEntry(type = "NOTE", content = fact))
+                                    "C'est enregistré dans ta mémoire locale."
+                                } else {
+                                    "Cette information est déjà enregistrée dans ta mémoire locale."
+                                }
+                            }
+                            IkarOrchestrator.Destination.WEB_RESEARCH -> WebResearch.search(question)
+                            IkarOrchestrator.Destination.ONLINE_MODEL -> {
+                                val token = IkarCredentialStore.load(applicationContext)
+                                    ?: throw IllegalStateException(
+                                        "Le mode connecté est activé, mais aucun jeton mémorisé n'est disponible pour la bulle. Dans IKAR, active « Mémoriser le jeton sur cet appareil » pour utiliser l'IA en ligne depuis la bulle."
+                                    )
+                                IkarOnlineModelGateway.sendMessageWithLocalFallback(token, question, history, savedEntries)
+                            }
+                            IkarOrchestrator.Destination.LOCAL_SECURITY_GUIDANCE,
+                            IkarOrchestrator.Destination.LOCAL_KNOWLEDGE,
+                            IkarOrchestrator.Destination.OFFLINE_ASSISTANT ->
+                                OfflineChatEngine.answer(question, savedEntries)
+                        }
                         dao.insert(MemoryEntry(type = "ASSISTANT_MESSAGE", content = answer))
                         answer
                     }
-                    transcript.removeView(waiting)
-                    appendChatBubble(transcript, reply, fromIkar = true)
-                    send.isEnabled = true
-                    scroll.post { scroll.fullScroll(View.FOCUS_DOWN) }
-                    if (speechOutputReady) speechOutput?.speak(reply.take(2500), TextToSpeech.QUEUE_FLUSH, null, "ikar-floating-reply")
+                        transcript.removeView(waiting)
+                        appendChatBubble(transcript, reply, fromIkar = true)
+                        scroll.post { scroll.fullScroll(View.FOCUS_DOWN) }
+                        if (speechOutputReady) speechOutput?.speak(reply.take(2500), TextToSpeech.QUEUE_FLUSH, null, "ikar-floating-reply")
+                    } catch (error: Exception) {
+                        transcript.removeView(waiting)
+                        appendChatBubble(
+                            transcript,
+                            error.localizedMessage ?: "IKAR n'a pas pu traiter cette demande. Réessaie.",
+                            fromIkar = true
+                        )
+                        scroll.post { scroll.fullScroll(View.FOCUS_DOWN) }
+                    } finally {
+                        send.isEnabled = true
+                    }
                 }
             }
         }

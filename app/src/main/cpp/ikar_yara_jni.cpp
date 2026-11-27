@@ -26,13 +26,16 @@ jlong g_cached_generation = -1;
 
 void initialize_yara_once() { g_yara_init_result = yr_initialize(); }
 
-struct MatchList { std::vector<std::string> names; };
+struct MatchList {
+    std::vector<std::string> names;
+    static constexpr size_t MAX_MATCHED_RULES = 512;
+};
 
 int yara_callback(YR_SCAN_CONTEXT*, int message, void* message_data, void* user_data) {
     if (message == CALLBACK_MSG_RULE_MATCHING && message_data != nullptr && user_data != nullptr) {
         const auto* rule = static_cast<const YR_RULE*>(message_data);
         auto* matches = static_cast<MatchList*>(user_data);
-        if (rule->identifier != nullptr) {
+        if (rule->identifier != nullptr && matches->names.size() < MatchList::MAX_MATCHED_RULES) {
             try { matches->names.emplace_back(rule->identifier); }
             catch (...) { return CALLBACK_ERROR; }
         }
@@ -89,7 +92,9 @@ int compile_rule_directory(const std::string& directory, YR_RULES** output, size
         if (input == nullptr) { ++compile_errors; continue; }
         // Community rules share a namespace so cross-rule dependencies resolve.
         // IKAR's bundled rules use a separate namespace to avoid identifier collisions.
-        const char* name_space = path.find("ikar-local-rules") != std::string::npos ? "ikar_local" : "ikar";
+        const bool is_ikar_local = path.find("ikar-local-rules") != std::string::npos ||
+                                  path.find("ikar-starter-rules") != std::string::npos;
+        const char* name_space = is_ikar_local ? "ikar_local" : "ikar";
         compile_errors += yr_compiler_add_file(compiler, input, name_space, path.c_str());
         std::fclose(input);
     }

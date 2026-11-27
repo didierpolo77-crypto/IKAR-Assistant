@@ -6,6 +6,7 @@ import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import androidx.documentfile.provider.DocumentFile
 import java.io.File
+import java.io.InputStream
 import java.security.KeyStore
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
@@ -24,6 +25,11 @@ object RansomwareRecoveryVault {
     private const val TAG_BITS = 128
     private const val IV_BYTES = 12
     private const val MAX_BACKUP_BYTES = 100L * 1024L * 1024L
+    private const val MAX_VAULT_BYTES = 512L * 1024L * 1024L
+
+    private fun storedBytes(context: Context): Long =
+        vaultDir(context).listFiles()?.filter { it.isFile && it.extension == "ikv" }
+            ?.sumOf { it.length() } ?: 0L
 
     data class Backup(
         val id: String,
@@ -34,6 +40,23 @@ object RansomwareRecoveryVault {
 
     private fun vaultDir(context: Context): File =
         File(context.noBackupFilesDir, "ransomware-recovery").apply { mkdirs() }
+
+    /** InputStream.read(byteArray) may return fewer bytes than requested. */
+    private fun readFully(input: InputStream, buffer: ByteArray): Boolean {
+        var offset = 0
+        while (offset < buffer.size) {
+            val count = input.read(buffer, offset, buffer.size - offset)
+            if (count < 0) return false
+            if (count == 0) {
+                val single = input.read()
+                if (single < 0) return false
+                buffer[offset++] = single.toByte()
+            } else {
+                offset += count
+            }
+        }
+        return true
+    }
 
     private fun key(): javax.crypto.SecretKey {
         val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
@@ -62,6 +85,13 @@ object RansomwareRecoveryVault {
         val id = java.util.UUID.randomUUID().toString()
         val destination = File(vaultDir(context), "$id.ikv")
         val temporary = File(vaultDir(context), "$id.tmp")
+        val existingBytes = storedBytes(context)
+        if (existingBytes >= MAX_VAULT_BYTES) {
+            throw IllegalStateException("Coffre plein (512 Mo). Supprime des anciennes sauvegardes avant d'en ajouter.")
+        }
+        if (vaultDir(context).usableSpace < 16L * 1024L * 1024L) {
+            throw IllegalStateException("Espace libre insuffisant pour créer une sauvegarde protégée.")
+        }
         var total = 0L
         try {
             val cipher = Cipher.getInstance(TRANSFORMATION)
@@ -78,7 +108,13 @@ object RansomwareRecoveryVault {
                             val count = input.read(buffer)
                             if (count < 0) break
                             total += count
-                            require(total <= MAX_BACKUP_BYTES) { "Limite de sauvegarde : 100 Mo." }
+                            require(total <= MAX_BACKUP_BYTES) { "Limite de sauvegarde par fichier : 100 Mo." }
+                            require(existingBytes + total <= MAX_VAULT_BYTES) {
+                                "Coffre plein (512 Mo). Supprime des anciennes sauvegardes avant d'en ajouter."
+                            }
+                            require(vaultDir(context).usableSpace >= 8L * 1024L * 1024L) {
+                                "Espace libre insuffisant : sauvegarde interrompue pour protéger le stockage."
+                            }
                             encrypted.write(buffer, 0, count)
                         }
                     }
@@ -87,10 +123,14 @@ object RansomwareRecoveryVault {
             if (!temporary.renameTo(destination)) {
                 throw IllegalStateException("Impossible de finaliser la copie protégée.")
             }
+            // Keep the original display name in app-private metadata so restoration
+            // does not silently turn every recovered document into an opaque .bin file.
+            File(vaultDir(context), "$id.meta").writeText(name, Charsets.UTF_8)
             return Backup(id, name, total, System.currentTimeMillis())
         } catch (error: Exception) {
             temporary.delete()
             destination.delete()
+            File(vaultDir(context), "$id.meta").delete()
             throw error
         }
     }
@@ -107,14 +147,25 @@ object RansomwareRecoveryVault {
 
         encryptedFile.inputStream().buffered().use { input ->
             val header = ByteArray(4)
-            require(input.read(header) == 4 && header.contentEquals(byteArrayOf(73, 75, 86, 1))) {
+            require(readFully(input, header) && header.contentEquals(byteArrayOf(73, 75, 86, 1))) {
                 "Format de sauvegarde invalide."
             }
             val iv = ByteArray(IV_BYTES)
-            require(input.read(iv) == IV_BYTES) { "En-tête de sauvegarde incomplet." }
+            require(readFully(input, iv)) { "En-tête de sauvegarde incomplet." }
             val cipher = Cipher.getInstance(TRANSFORMATION)
             cipher.init(Cipher.DECRYPT_MODE, key(), GCMParameterSpec(TAG_BITS, iv))
-            val outputDoc = folder.createFile("application/octet-stream", "ikar-restored-$backupId.bin")
+            val storedName = File(vaultDir(context), "$backupId.meta")
+                .takeIf { it.isFile }
+                ?.readText(Charsets.UTF_8)
+                ?.trim()
+                ?.takeIf { it.isNotBlank() }
+            val safeName = (storedName ?: "ikar-restored-$backupId.bin")
+                .replace('/', '_')
+                .replace('\\', '_')
+                .replace(Regex("[\\p{Cntrl}]"), "_")
+                .take(180)
+                .ifBlank { "ikar-restored-$backupId.bin" }
+            val outputDoc = folder.createFile("application/octet-stream", safeName)
                 ?: throw IllegalStateException("Impossible de créer le nouveau fichier restauré.")
             try {
                 context.contentResolver.openOutputStream(outputDoc.uri, "w")?.use { output ->

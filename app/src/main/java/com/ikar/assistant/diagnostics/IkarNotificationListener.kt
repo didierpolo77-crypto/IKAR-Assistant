@@ -42,11 +42,12 @@ class IkarNotificationListener : NotificationListenerService() {
             )
             .apply()
 
-        // Every posted notification/update gets its own IKAR alert. The original
-        // title and body are deliberately not copied into IKAR's alert.
+        // One ongoing slot per app prevents the notification shade from flooding.
+        // The aggregate counter still records every posted/updated notification.
         postIkarAlert(
-            "Notification reçue · $appLabel",
-            "Une notification de cette application vient d'arriver ou d'être actualisée."
+            "Notifications · $appLabel",
+            "$count notification(s) reçue(s) enregistrée(s). Dernier événement : arrivée ou mise à jour.",
+            stableAlertId(sbn.packageName, removed = false)
         )
     }
 
@@ -62,8 +63,9 @@ class IkarNotificationListener : NotificationListenerService() {
             .apply()
 
         postIkarAlert(
-            "Notification retirée · $appLabel",
-            "Une notification de cette application a été supprimée ou effacée."
+            "Notifications retirées · $appLabel",
+            "${prefs.getInt("notifications_removed", 0)} notification(s) retirée(s) enregistrée(s).",
+            stableAlertId(sbn.packageName, removed = true)
         )
     }
 
@@ -73,7 +75,10 @@ class IkarNotificationListener : NotificationListenerService() {
             packageManager.getApplicationLabel(info).toString()
         }.getOrDefault(packageName)
 
-    private fun postIkarAlert(title: String, message: String) {
+    private fun stableAlertId(packageName: String, removed: Boolean): Int =
+        (if (removed) 0x60000000 else 0x40000000) or (packageName.hashCode() and 0x1fffffff)
+
+    private fun postIkarAlert(title: String, message: String, notificationId: Int) {
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             manager.createNotificationChannel(
@@ -102,7 +107,7 @@ class IkarNotificationListener : NotificationListenerService() {
             .setWhen(System.currentTimeMillis())
             .build()
         try {
-            manager.notify((System.nanoTime() and 0x7fffffff).toInt(), notification)
+            manager.notify(notificationId, notification)
         } catch (_: SecurityException) {
             // Android 13+ may deny IKAR's own notification permission.
         }

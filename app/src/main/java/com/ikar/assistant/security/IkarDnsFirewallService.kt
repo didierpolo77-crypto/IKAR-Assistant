@@ -40,7 +40,8 @@ class IkarDnsFirewallService : VpnService() {
                 .addAddress("10.77.0.1", 32)
                 .addDnsServer("10.77.0.2")
                 .addRoute("10.77.0.2", 32)
-                .allowFamily(android.system.OsConstants.AF_INET)
+                // Keep IPv6 connectivity working; IPv6 DNS is not inspected by this IPv4-only filter.
+                .allowFamily(android.system.OsConstants.AF_INET6)
                 .establish()
         } catch (_: Exception) {
             null
@@ -68,7 +69,8 @@ class IkarDnsFirewallService : VpnService() {
         try {
             while (running.get()) {
                 val length = input.read(packet)
-                if (length <= 0) continue
+                if (length < 0) break
+                if (length == 0) continue
                 val response = handleDnsPacket(packet, length) ?: continue
                 output.write(response)
             }
@@ -83,13 +85,19 @@ class IkarDnsFirewallService : VpnService() {
         if (length < 28 || packet[0].toInt().ushr(4) != 4 || (packet[9].toInt() and 0xff) != 17) return null
         val ipHeaderLength = (packet[0].toInt() and 0x0f) * 4
         if (ipHeaderLength < 20 || length < ipHeaderLength + 8 + 12) return null
+        val totalLength = u16(packet, 2)
+        if (totalLength < ipHeaderLength + 8 + 12 || totalLength > length) return null
+        // Fragmented DNS packets are rejected rather than partially parsed or misclassified.
+        val fragmentField = u16(packet, 6)
+        if ((fragmentField and 0x3fff) != 0) return null
         val sourceIp = packet.copyOfRange(12, 16)
         val destinationIp = packet.copyOfRange(16, 20)
+        if (!destinationIp.contentEquals(byteArrayOf(10, 77, 0, 2))) return null
         val sourcePort = u16(packet, ipHeaderLength)
         val destinationPort = u16(packet, ipHeaderLength + 2)
         if (destinationPort != 53) return null
         val udpLength = u16(packet, ipHeaderLength + 4)
-        if (udpLength < 20 || ipHeaderLength + udpLength > length) return null
+        if (udpLength < 20 || ipHeaderLength + udpLength > totalLength) return null
         val dnsOffset = ipHeaderLength + 8
         val dns = packet.copyOfRange(dnsOffset, ipHeaderLength + udpLength)
         if (dns.size < 17 || dns.size > 4096) return null
@@ -98,7 +106,20 @@ class IkarDnsFirewallService : VpnService() {
         if ((dnsFlags and 0x8000) != 0 || ((dnsFlags ushr 11) and 0x0f) != 0 || u16(dns, 4) != 1) return null
         val host = readQuestionHost(dns) ?: return null
         val blocked = ThreatIntelStore.isKnownMaliciousHost(this, host)
-        val responseDns = if (blocked) makeNxdomain(dns) else forwardDns(dns) ?: return null
+        val responseDns = if (blocked) {
+            recordDnsResult(host, "blocked")
+            makeNxdomain(dns)
+        } else {
+            val forwarded = forwardDns(dns)
+            if (forwarded == null) {
+                recordDnsResult(host, "error")
+                // Return an explicit DNS SERVFAIL instead of leaving the client to time out.
+                makeDnsErrorResponse(dns, rcode = 2)
+            } else {
+                recordDnsResult(host, "allowed")
+                forwarded
+            }
+        }
         return buildIpv4UdpResponse(
             sourceIp = destinationIp,
             destinationIp = sourceIp,
@@ -109,27 +130,74 @@ class IkarDnsFirewallService : VpnService() {
     }
 
     private fun forwardDns(query: ByteArray): ByteArray? {
-        var socket: DatagramSocket? = null
-        return try {
-            socket = DatagramSocket()
-            if (!protect(socket)) return null
-            socket.soTimeout = 2800
-            val upstream = InetAddress.getByName("1.1.1.1")
-            socket.send(DatagramPacket(query, query.size, upstream, 53))
-            val buffer = ByteArray(4096)
-            val response = DatagramPacket(buffer, buffer.size)
-            socket.receive(response)
-            val received = buffer.copyOf(response.length)
-            if (received.size < 12 || received[0] != query[0] || received[1] != query[1]) return null
-            if ((u16(received, 2) and 0x8000) == 0) return null
-            received
-        } catch (_: SocketTimeoutException) {
-            null
-        } catch (_: Exception) {
-            null
-        } finally {
-            socket?.close()
+        // Quad9 Security first, then Cloudflare's malware-blocking resolver.
+        // Each socket is protected so upstream DNS traffic cannot loop into this VPN.
+        val upstreams = listOf("9.9.9.9", "1.1.1.2")
+        for (address in upstreams) {
+            var socket: DatagramSocket? = null
+            try {
+                val upstream = InetAddress.getByName(address)
+                socket = DatagramSocket()
+                if (!protect(socket)) continue
+                socket.soTimeout = 1600
+                socket.connect(upstream, 53)
+                socket.send(DatagramPacket(query, query.size))
+                val buffer = ByteArray(4096)
+                val response = DatagramPacket(buffer, buffer.size)
+                socket.receive(response)
+                val received = buffer.copyOf(response.length)
+                if (isValidDnsResponse(query, received)) return received
+            } catch (_: SocketTimeoutException) {
+                // Try the second independent resolver.
+            } catch (_: Exception) {
+                // A resolver may be unavailable on this network; try the fallback.
+            } finally {
+                socket?.close()
+            }
         }
+        return null
+    }
+
+    private fun isValidDnsResponse(query: ByteArray, response: ByteArray): Boolean {
+        if (response.size < 17 || response[0] != query[0] || response[1] != query[1]) return false
+        val flags = u16(response, 2)
+        if ((flags and 0x8000) == 0 || ((flags ushr 11) and 0x0f) != 0) return false
+        if (u16(response, 4) != 1) return false
+        val queryEnd = questionEnd(query) ?: return false
+        val responseEnd = questionEnd(response) ?: return false
+        if (queryEnd - 12 != responseEnd - 12) return false
+        for (index in 12 until queryEnd) {
+            if (query[index] != response[index]) return false
+        }
+        return true
+    }
+
+    private fun questionEnd(dns: ByteArray): Int? {
+        var offset = 12
+        while (offset < dns.size) {
+            val size = dns[offset++].toInt() and 0xff
+            if (size == 0) {
+                if (offset + 4 > dns.size) return null
+                return offset + 4
+            }
+            // Compression pointers are not valid in the original question name.
+            if (size > 63 || offset + size > dns.size) return null
+            offset += size
+        }
+        return null
+    }
+
+    private fun recordDnsResult(host: String, result: String) {
+        val prefs = getSharedPreferences(STATS_PREFS, MODE_PRIVATE)
+        val editor = prefs.edit()
+            .putString("last_domain", host)
+            .putLong("last_query_at", System.currentTimeMillis())
+        when (result) {
+            "blocked" -> editor.putLong("blocked_count", prefs.getLong("blocked_count", 0L) + 1L)
+            "allowed" -> editor.putLong("allowed_count", prefs.getLong("allowed_count", 0L) + 1L)
+            else -> editor.putLong("error_count", prefs.getLong("error_count", 0L) + 1L)
+        }
+        editor.apply()
     }
 
     private fun readQuestionHost(dns: ByteArray): String? {
@@ -151,10 +219,14 @@ class IkarDnsFirewallService : VpnService() {
         return labels.joinToString(".").lowercase()
     }
 
-    private fun makeNxdomain(query: ByteArray): ByteArray {
-        val response = query.copyOf()
+    private fun makeNxdomain(query: ByteArray): ByteArray =
+        makeDnsErrorResponse(query, rcode = 3)
+
+    private fun makeDnsErrorResponse(query: ByteArray, rcode: Int): ByteArray {
+        // Return only the DNS header and original question; discard EDNS/additional records.
+        val response = query.copyOf(questionEnd(query) ?: 12)
         val flags = u16(response, 2)
-        putU16(response, 2, (flags and 0x0100) or 0x8083) // QR, RA, NXDOMAIN; preserve RD
+        putU16(response, 2, (flags and 0x0100) or 0x8080 or (rcode and 0x0f))
         putU16(response, 6, 0) // ANCOUNT
         putU16(response, 8, 0) // NSCOUNT
         putU16(response, 10, 0) // ARCOUNT
@@ -248,6 +320,7 @@ class IkarDnsFirewallService : VpnService() {
 
     companion object {
         private const val PREFS = "ikar_security_center"
+        private const val STATS_PREFS = "ikar_dns_firewall_stats"
         private const val CHANNEL_ID = "ikar_dns_firewall"
         private const val NOTIFICATION_ID = 3621
     }

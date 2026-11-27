@@ -42,8 +42,20 @@ object FolderAuditScheduler {
         )
     }
 
+    fun scheduleAfterSharedFileChange(context: Context) {
+        val request = OneTimeWorkRequestBuilder<FolderAuditWorker>()
+            .setInitialDelay(2, TimeUnit.MINUTES)
+            .build()
+        WorkManager.getInstance(context).enqueueUniqueWork(
+            "ikar_download_change_audit",
+            ExistingWorkPolicy.REPLACE,
+            request
+        )
+    }
+
     fun disable(context: Context) {
         WorkManager.getInstance(context).cancelUniqueWork(UNIQUE_WORK)
+        WorkManager.getInstance(context).cancelUniqueWork("ikar_download_change_audit")
     }
 }
 
@@ -60,11 +72,17 @@ class FolderAuditWorker(
 
         return try {
             val report = SecurityCenter.auditFolder(applicationContext, uri)
-            val alert = report.alert
+            val downloadScan = DownloadedFileScanner.scanTree(applicationContext, uri)
+            val alert = report.alert || downloadScan.hasAlerts
             if (alert) {
-                val message = "Ajouts : ${report.added}, modifications : ${report.modified}, suppressions : ${report.removed}. Fichiers à extension suspecte : ${report.suspiciousNames.size}. Vérifie le dossier et tes sauvegardes."
+                val details = buildList {
+                    if (report.alert) add("Anti-ransomware : ajouts ${report.added}, modifications ${report.modified}, suppressions ${report.removed}, extensions suspectes ${report.suspiciousNames.size}.")
+                    if (downloadScan.flagged.isNotEmpty()) add("Fichiers avec indicateurs : ${downloadScan.flagged.joinToString("; ")}")
+                    if (downloadScan.unscanned.isNotEmpty()) add("Fichiers non analysés : ${downloadScan.unscanned.joinToString("; ")}")
+                }.joinToString(" ")
+                val message = "Contrôle du dossier : ${downloadScan.scanned} nouveau(x) ou modifié(s) fichier(s) analysé(s). $details"
                 MemoryDatabase.getInstance(applicationContext).memoryDao().insert(
-                    MemoryEntry(type = "SECURITY_EVENT", content = "Alerte anti-ransomware en arrière-plan — $message")
+                    MemoryEntry(type = "SECURITY_EVENT", content = "Alerte Web Shield / téléchargements — $message")
                 )
                 showAlert(message)
             }

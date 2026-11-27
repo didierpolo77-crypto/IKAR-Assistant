@@ -17,6 +17,11 @@ if not yarac.is_file():
     raise SystemExit(f"yarac not found: {yarac}")
 
 headers = {"User-Agent": "IKAR-YARA-Forge-CI", "Accept": "application/vnd.github+json"}
+# Use the workflow's short-lived, read-only token to avoid the very low
+# unauthenticated GitHub API rate limit. Never print or persist this token.
+github_token = os.environ.get("GITHUB_TOKEN", "").strip()
+if github_token:
+    headers["Authorization"] = f"Bearer {github_token}"
 request = urllib.request.Request(
     "https://api.github.com/repos/YARAHQ/yara-forge/releases/latest", headers=headers
 )

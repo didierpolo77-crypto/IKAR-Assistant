@@ -94,7 +94,7 @@ class ThreatIntelUpdateWorker(
             }
 
             ThreatIntelStore.replaceActiveUrls(applicationContext, activeUrls)
-            ThreatIntelStore.replaceKnownSha256(applicationContext, hashes)
+            ThreatIntelStore.mergeKnownSha256(applicationContext, hashes)
             ThreatIntelStore.setUpdateStatus(
                 applicationContext,
                 "Mise à jour réussie : ${activeUrls.size} URLs actives et ${hashes.size} empreintes SHA-256."
@@ -128,8 +128,8 @@ class ThreatIntelUpdateWorker(
             val status = connection.responseCode
             if (status == 401 || status == 403) throw AuthRejected()
             if (status !in 200..299) throw java.io.IOException("HTTP $status")
-            val body = connection.inputStream.bufferedReader().use { it.readText() }
-            if (body.length > 8_000_000) throw java.io.IOException("Réponse URLhaus trop volumineuse")
+            val body = BoundedResponseReader.readUtf8(connection.inputStream, 8_000_000, "URLhaus")
+            if (body.isBlank()) throw java.io.IOException("Réponse URLhaus vide")
             return JSONObject(body)
         } finally {
             connection.disconnect()

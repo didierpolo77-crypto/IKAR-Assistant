@@ -10,6 +10,11 @@ on:
 permissions:
   contents: read
 
+# Keep only the newest PR build; a new commit supersedes older APK builds.
+concurrency:
+  group: android-apk-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -32,6 +37,8 @@ jobs:
           OPENSSL_TAG: openssl-3.5.9
         run: bash scripts/build-libyara-android-armv7.sh
       - name: Validate YARA Forge Full rules with YARA 4.5.0
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           git clone --depth 1 --branch v4.5.0 https://github.com/VirusTotal/yara.git /tmp/yara-host
           cd /tmp/yara-host
@@ -50,9 +57,9 @@ jobs:
         with:
           gradle-version: "8.9"
       - name: Run unit tests
-        run: gradle testDebugUnitTest --no-daemon
+        run: gradle clean testDebugUnitTest --no-daemon --no-build-cache
       - name: Build debug APK
-        run: gradle assembleDebug --no-daemon
+        run: gradle assembleDebug --no-daemon --no-build-cache
       - name: Verify APK and ARMv7 ABI presence
         shell: bash
         run: |
