@@ -1318,12 +1318,12 @@ private fun IkarHome(
                                                     "Copie chiffrée vérifiée et conservée, mais l'original n'a pas été retiré (droits SAF, fichier modifié ou suppression refusée). Il reste présent."
                                                 }
                                                 downloadScanStatus = quarantineStatus
-                                                runCatching {
+                                                try {
                                                     quarantineItems = withContext(Dispatchers.IO) {
                                                         FileQuarantineStore.list(context.applicationContext)
                                                     }
-                                                }
-                                                runCatching {
+                                                } catch (_: Exception) { }
+                                                try {
                                                     withContext(Dispatchers.IO) {
                                                         ActionAudit.record(
                                                             memoryDao,
@@ -1332,12 +1332,12 @@ private fun IkarHome(
                                                             "Fichier=${outcome.item.name}; SHA-256 exact MalwareBazaar; originalRemoved=${outcome.originalRemoved}"
                                                         )
                                                     }
-                                                }
+                                                } catch (_: Exception) { }
                                                 downloadScanSummary = downloadScanSummary?.copy(
                                                     candidates = downloadScanSummary?.candidates.orEmpty()
                                                         .filterNot { it.uri == candidate.uri }
                                                 )
-                                                runCatching { refreshMemories() }
+                                                try { refreshMemories() } catch (_: Exception) { }
                                             } catch (error: Exception) {
                                                 quarantineStatus = "Quarantaine interrompue : ${error.localizedMessage ?: error.javaClass.simpleName}. Le fichier original n'est pas volontairement supprimé."
                                                 downloadScanStatus = quarantineStatus
