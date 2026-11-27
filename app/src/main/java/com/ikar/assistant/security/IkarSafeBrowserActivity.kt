@@ -24,6 +24,8 @@ import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
+import java.io.ByteArrayInputStream
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * Lightweight in-app browser. Uses Android WebView Safe Browsing for URLs
@@ -39,6 +41,7 @@ class IkarSafeBrowserActivity : Activity() {
     private var initialNavigationStarted = false
     private var currentNavigationSafeBrowsing = false
     private var privacyModeEnabled = true
+    private val blockedTrackerRequests = AtomicInteger(0)
     private lateinit var privacyButton: Button
 
     private val safeBrowsingTimeout = Runnable {
@@ -87,7 +90,7 @@ class IkarSafeBrowserActivity : Activity() {
                 applyPrivacySettings()
                 text = if (privacyModeEnabled) "Confidentialité : activée" else "Confidentialité : standard"
                 status.text = if (privacyModeEnabled) {
-                    "Protection vie privée active : cookies tiers bloqués, géolocalisation refusée, cache désactivé."
+                    "Protection vie privée active : cookies tiers bloqués, pisteurs connus filtrés, géolocalisation refusée, cache désactivé. Ce mode ne masque pas ton adresse IP."
                 } else {
                     "Mode standard : les cookies tiers peuvent être acceptés. La géolocalisation reste refusée."
                 }
@@ -146,6 +149,27 @@ class IkarSafeBrowserActivity : Activity() {
                         }
                     }
                     return false
+                }
+
+                override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): android.webkit.WebResourceResponse? {
+                    val host = request.url.host
+                    if (privacyModeEnabled && !request.isForMainFrame && IkarTrackerBlocklist.isTrackerHost(host)) {
+                        val total = blockedTrackerRequests.incrementAndGet()
+                        mainHandler.post {
+                            if (!isFinishing && !isDestroyed) {
+                                status.text = "Confidentialité active · $total requête(s) de pistage bloquée(s) dans cette session."
+                            }
+                        }
+                        return android.webkit.WebResourceResponse(
+                            "text/plain",
+                            "UTF-8",
+                            204,
+                            "No Content",
+                            emptyMap(),
+                            ByteArrayInputStream(ByteArray(0))
+                        )
+                    }
+                    return super.shouldInterceptRequest(view, request)
                 }
 
                 override fun onPageStarted(view: WebView, url: String?, favicon: android.graphics.Bitmap?) {
@@ -261,6 +285,9 @@ class IkarSafeBrowserActivity : Activity() {
     private fun applyPrivacySettings() {
         if (!::browser.isInitialized) return
         CookieManager.getInstance().setAcceptCookie(true)
+        browser.settings.javaScriptCanOpenWindowsAutomatically = false
+        browser.settings.setSupportMultipleWindows(false)
+        browser.settings.saveFormData = false
         CookieManager.getInstance().setAcceptThirdPartyCookies(browser, !privacyModeEnabled)
         browser.settings.cacheMode = if (privacyModeEnabled) {
             android.webkit.WebSettings.LOAD_NO_CACHE
