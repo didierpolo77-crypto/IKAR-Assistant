@@ -1256,6 +1256,10 @@ private fun IkarHome(
                     Text("Analyse des téléchargements partagés", style = MaterialTheme.typography.titleMedium)
                     Text("${summary.scanned} fichier(s) analysé(s) · ${summary.flagged.size} alerte(s) · ${summary.unscanned.size} analyse(s) incomplète(s)", style = MaterialTheme.typography.bodySmall)
                     Text(downloadScanStatus, style = MaterialTheme.typography.bodySmall)
+                    Text(
+                        "La confirmation peut consulter la base MalwareBazaar locale ou en ligne. En ligne, IKAR transmet uniquement l'empreinte SHA-256 et les noms des règles YARA ; aucun octet du fichier n'est envoyé.",
+                        style = MaterialTheme.typography.bodySmall
+                    )
                     summary.candidates.forEach { candidate ->
                         Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
                             Text(candidate.name, style = MaterialTheme.typography.bodyMedium)
