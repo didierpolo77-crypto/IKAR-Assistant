@@ -895,8 +895,14 @@ private fun IkarHome(
                     } else {
                         report.indicators.forEach { Text("• $it", style = MaterialTheme.typography.bodySmall) }
                     }
+                    if (report.indicators.isNotEmpty() && report.malwareBazaar?.exactHashMatch != true) {
+                        Text(
+                            "Quarantaine contrôlée : les indices ou heuristiques ne constituent pas une confirmation par empreinte. Le fichier reste à examiner ; aucune isolation automatique n'est déclenchée.",
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
                     Text("Le moteur natif officiel libyara 4.5.0 est utilisé en priorité. Les règles YARA Forge sont conservées localement après téléchargement et restent utilisables hors connexion. Le moteur Kotlin n'est qu'un secours limité. ClamAV natif n'est pas encore embarqué.", style = MaterialTheme.typography.bodySmall)
-                    if (report.indicators.isNotEmpty() && lastScannedUri != null) {
+                    if (report.malwareBazaar?.exactHashMatch == true && lastScannedUri != null) {
                         Button(onClick = {
                             val source = lastScannedUri
                             if (source != null) {
