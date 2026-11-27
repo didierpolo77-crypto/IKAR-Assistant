@@ -26,7 +26,7 @@ object ArchiveContentInspector {
                 entries++
                 if (entries > MAX_ENTRIES) { incomplete = "limite de 100 entrées atteinte"; break }
 
-                val normalized = entry.name.orEmpty().replace('\\\\', '/')
+                val normalized = entry.name.orEmpty().replace(92.toChar(), '/')
                 if (normalized.startsWith("/") || normalized.split('/').any { it == ".." } ||
                     Regex("^[A-Za-z]:").containsMatchIn(normalized)
                 ) findings += "Chemin d'entrée dangereux dans l'archive"
