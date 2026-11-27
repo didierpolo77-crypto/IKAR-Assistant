@@ -42,8 +42,8 @@ object DownloadRiskInspector {
         if (extension in executableExtensions) {
             high += "Extension exécutable ou installable : .$extension"
         }
-        if (suffixes.dropLast(1).any { it in executableExtensions }) {
-            high += "Double extension masquant un type exécutable"
+        if (extension in executableExtensions && suffixes.size > 1) {
+            high += "Double extension avec suffixe exécutable final (ex. document.pdf.exe)"
         }
         if (mime in executableMimeTypes || mime.startsWith("application/x-executable")) {
             high += "Type MIME associé à du code exécutable : $mime"
