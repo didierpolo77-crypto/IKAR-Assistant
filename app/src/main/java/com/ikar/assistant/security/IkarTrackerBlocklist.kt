@@ -18,7 +18,7 @@ internal object IkarTrackerBlocklist {
         "hotjar.com",
         "hotjar.io",
         "clarity.ms",
-        "bing.com",
+        "bat.bing.com",
         "segment.io",
         "segment.com",
         "amplitude.com",
@@ -28,7 +28,7 @@ internal object IkarTrackerBlocklist {
         "ads-twitter.com",
         "analytics.tiktok.com",
         "snap.licdn.com",
-        "linkedin.com"
+        "px.ads.linkedin.com"
     )
 
     fun isTrackerHost(host: String?): Boolean {
