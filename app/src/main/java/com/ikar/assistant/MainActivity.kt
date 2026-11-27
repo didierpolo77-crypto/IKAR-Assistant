@@ -560,7 +560,15 @@ private fun IkarHome(
             scope.launch {
                 try {
                     val report = withContext(Dispatchers.IO) { SecurityCenter.auditFolder(context.applicationContext, uri) }
+                    val downloadScan = withContext(Dispatchers.IO) { DownloadedFileScanner.scanTree(context.applicationContext, uri) }
                     folderReport = report
+                    if (downloadScan.hasAlerts) {
+                        val details = (downloadScan.flagged + downloadScan.unscanned).joinToString("; ")
+                        Toast.makeText(context, "IKAR : fichier(s) à vérifier dans le dossier choisi. $details", Toast.LENGTH_LONG).show()
+                        withContext(Dispatchers.IO) {
+                            memoryDao.insert(MemoryEntry(type = "SECURITY_EVENT", content = "Analyse des téléchargements — ${downloadScan.scanned} fichier(s) analysé(s). $details"))
+                        }
+                    }
                     if (speakReplies && (report.changed >= 20 || report.suspiciousNames.isNotEmpty())) {
                         onSpeak("Alerte de sécurité IKAR. ${report.message} ${report.changed} changements relevés.")
                     }
@@ -1207,7 +1215,7 @@ private fun IkarHome(
                 }
                 Text("${vaultBackupIds.size} copie(s) chiffrée(s) · ${vaultBackupStatus}", style = MaterialTheme.typography.bodySmall)
                 Button(onClick = { folderPicker.launch(null) }, enabled = !folderScanRunning, modifier = Modifier.fillMaxWidth()) {
-                    Text(if (folderScanRunning) "Audit en cours…" else "Choisir un dossier à surveiller")
+                    Text(if (folderScanRunning) "Audit en cours…" else "Choisir Téléchargements (Chrome et autres applications)")
                 }
                 folderReport?.let { report ->
                     Text(report.message, style = MaterialTheme.typography.titleMedium)
