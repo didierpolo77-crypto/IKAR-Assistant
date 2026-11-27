@@ -11,6 +11,9 @@ import android.os.Handler
 import android.os.Looper
 import android.view.ViewGroup
 import android.webkit.SafeBrowsingResponse
+import android.webkit.CookieManager
+import android.webkit.WebChromeClient
+import android.webkit.PermissionRequest
 import android.webkit.SslErrorHandler
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
@@ -35,6 +38,8 @@ class IkarSafeBrowserActivity : Activity() {
     private var pendingInitialUrl: String? = null
     private var initialNavigationStarted = false
     private var currentNavigationSafeBrowsing = false
+    private var privacyModeEnabled = true
+    private lateinit var privacyButton: Button
 
     private val safeBrowsingTimeout = Runnable {
         if (!initialNavigationStarted && !isFinishing && !isDestroyed) {
@@ -75,6 +80,19 @@ class IkarSafeBrowserActivity : Activity() {
         }
         controls.addView(address)
         controls.addView(open)
+        privacyButton = Button(this).apply {
+            text = "Confidentialité : activée"
+            setOnClickListener {
+                privacyModeEnabled = !privacyModeEnabled
+                applyPrivacySettings()
+                text = if (privacyModeEnabled) "Confidentialité : activée" else "Confidentialité : standard"
+                status.text = if (privacyModeEnabled) {
+                    "Protection vie privée active : cookies tiers bloqués, géolocalisation refusée, cache désactivé."
+                } else {
+                    "Mode standard : les cookies tiers peuvent être acceptés. La géolocalisation reste refusée."
+                }
+            }
+        }
         status = TextView(this).apply {
             text = "Initialisation de la protection Web…"
             textSize = 12f
@@ -88,15 +106,46 @@ class IkarSafeBrowserActivity : Activity() {
             settings.allowFileAccess = false
             settings.allowContentAccess = false
             settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_NEVER_ALLOW
+            settings.setGeolocationEnabled(false)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 settings.safeBrowsingEnabled = true
+            }
+            webChromeClient = object : WebChromeClient() {
+                override fun onGeolocationPermissionsShowPrompt(
+                    origin: String,
+                    callback: android.webkit.GeolocationPermissions.Callback
+                ) {
+                    callback.invoke(origin, false, false)
+                }
+
+                override fun onPermissionRequest(request: PermissionRequest) {
+                    request.deny()
+                }
             }
             webViewClient = object : WebViewClient() {
                 override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                     val scheme = request.url.scheme?.lowercase()
-                    if (scheme == "http" || scheme == "https") return false
-                    Toast.makeText(this@IkarSafeBrowserActivity, "Protocole bloqué par IKAR.", Toast.LENGTH_SHORT).show()
-                    return true
+                    if (scheme != "http" && scheme != "https") {
+                        Toast.makeText(this@IkarSafeBrowserActivity, "Protocole bloqué par IKAR.", Toast.LENGTH_SHORT).show()
+                        return true
+                    }
+                    // Re-check every top-level navigation, including redirects and clicked links.
+                    if (request.isForMainFrame) {
+                        val target = request.url.toString()
+                        val assessment = SecurityCenter.checkLink(target)
+                        if (assessment.suspicious) {
+                            AlertDialog.Builder(this@IkarSafeBrowserActivity)
+                                .setTitle("Lien à vérifier")
+                                .setMessage(assessment.reasons.joinToString("\n\n") +
+                                    "\n\nIKAR ne peut pas certifier qu'un site est malveillant. Continuer malgré cet avertissement ?")
+                                .setNegativeButton("Bloquer", null)
+                                .setPositiveButton("Continuer") { _, _ -> view.loadUrl(target) }
+                                .show()
+                            status.text = "Navigation suspendue : destination à vérifier."
+                            return true
+                        }
+                    }
+                    return false
                 }
 
                 override fun onPageStarted(view: WebView, url: String?, favicon: android.graphics.Bitmap?) {
@@ -161,9 +210,15 @@ class IkarSafeBrowserActivity : Activity() {
         }
         root.addView(heading)
         root.addView(controls)
+        root.addView(privacyButton)
         root.addView(status)
         root.addView(browser)
         setContentView(root)
+        privacyModeEnabled = getSharedPreferences("ikar_browser_privacy", MODE_PRIVATE)
+            .getBoolean("privacy_mode_enabled", true)
+        applyPrivacySettings()
+        privacyButton.text = if (privacyModeEnabled) "Confidentialité : activée" else "Confidentialité : standard"
+        status.text = "Protection vie privée active : cookies tiers bloqués, géolocalisation refusée, cache désactivé."
 
         val incoming = intent?.data
         val initial = incoming?.toString()
@@ -201,6 +256,20 @@ class IkarSafeBrowserActivity : Activity() {
             status.text = "Protection Safe Browsing indisponible sur cette version Android."
             loadAddress(initial)
         }
+    }
+
+    private fun applyPrivacySettings() {
+        if (!::browser.isInitialized) return
+        CookieManager.getInstance().setAcceptCookie(true)
+        CookieManager.getInstance().setAcceptThirdPartyCookies(browser, !privacyModeEnabled)
+        browser.settings.cacheMode = if (privacyModeEnabled) {
+            android.webkit.WebSettings.LOAD_NO_CACHE
+        } else {
+            android.webkit.WebSettings.LOAD_DEFAULT
+        }
+        getSharedPreferences("ikar_browser_privacy", MODE_PRIVATE).edit()
+            .putBoolean("privacy_mode_enabled", privacyModeEnabled)
+            .apply()
     }
 
     private fun startInitialNavigation() {
@@ -262,6 +331,15 @@ class IkarSafeBrowserActivity : Activity() {
         mainHandler.removeCallbacks(safeBrowsingTimeout)
         if (::browser.isInitialized) {
             browser.stopLoading()
+            if (privacyModeEnabled) {
+                // Clear this app's WebView browsing state on exit; this also signs out
+                // of sites opened in this WebView and is intentionally disclosed.
+                browser.clearHistory()
+                browser.clearCache(true)
+                CookieManager.getInstance().removeAllCookies(null)
+                CookieManager.getInstance().flush()
+                android.webkit.WebStorage.getInstance().deleteAllData()
+            }
             browser.destroy()
         }
         super.onDestroy()
