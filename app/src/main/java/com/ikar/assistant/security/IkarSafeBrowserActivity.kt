@@ -137,7 +137,7 @@ class IkarSafeBrowserActivity : Activity() {
                     if (request.isForMainFrame) {
                         val target = request.url.toString()
                         val host = request.url.host.orEmpty()
-                        if (ThreatIntelStore.isKnownMaliciousHost(this@IkarSafeBrowserActivity, host)) {
+                        if (runCatching { ThreatIntelStore.isKnownMaliciousHost(this@IkarSafeBrowserActivity, host) }.getOrDefault(false)) {
                             status.text = "Destination bloquée : domaine présent dans la base locale de menaces."
                             Toast.makeText(this@IkarSafeBrowserActivity, "Domaine malveillant connu bloqué par IKAR.", Toast.LENGTH_LONG).show()
                             return true
@@ -161,7 +161,7 @@ class IkarSafeBrowserActivity : Activity() {
                 override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): android.webkit.WebResourceResponse? {
                     val host = request.url.host
                     if (!request.isForMainFrame && !host.isNullOrBlank() &&
-                        ThreatIntelStore.isKnownMaliciousHost(this@IkarSafeBrowserActivity, host)
+                        runCatching { ThreatIntelStore.isKnownMaliciousHost(this@IkarSafeBrowserActivity, host) }.getOrDefault(false)
                     ) {
                         val total = blockedThreatRequests.incrementAndGet()
                         mainHandler.post {
@@ -350,7 +350,7 @@ class IkarSafeBrowserActivity : Activity() {
         }
         address.setText(normalized)
         val parsedHost = uri.host.orEmpty()
-        if (ThreatIntelStore.isKnownMaliciousHost(this, parsedHost)) {
+        if (runCatching { ThreatIntelStore.isKnownMaliciousHost(this, parsedHost) }.getOrDefault(false)) {
             status.text = "Web Shield : ce domaine figure dans la base locale de menaces. Navigation bloquée."
             Toast.makeText(this, "Domaine malveillant connu bloqué par IKAR.", Toast.LENGTH_LONG).show()
             return
