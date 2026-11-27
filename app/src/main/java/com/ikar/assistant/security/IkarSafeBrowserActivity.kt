@@ -40,7 +40,7 @@ class IkarSafeBrowserActivity : Activity() {
     private var pendingInitialUrl: String? = null
     private var initialNavigationStarted = false
     private var currentNavigationSafeBrowsing = false
-    private var privacyModeEnabled = true
+    @Volatile private var privacyModeEnabled = true
     private val blockedTrackerRequests = AtomicInteger(0)
     private lateinit var privacyButton: Button
 
@@ -242,7 +242,7 @@ class IkarSafeBrowserActivity : Activity() {
             .getBoolean("privacy_mode_enabled", true)
         applyPrivacySettings()
         privacyButton.text = if (privacyModeEnabled) "Confidentialité : activée" else "Confidentialité : standard"
-        status.text = "Protection vie privée active : cookies tiers bloqués, géolocalisation refusée, cache désactivé."
+        status.text = "Confidentialité active : cookies tiers bloqués, pisteurs connus filtrés, géolocalisation refusée. Ton adresse IP reste visible aux sites."
 
         val incoming = intent?.data
         val initial = incoming?.toString()
