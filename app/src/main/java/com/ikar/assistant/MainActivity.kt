@@ -951,7 +951,7 @@ private fun IkarHome(
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text("Protection Web IKAR", style = MaterialTheme.typography.titleLarge)
-                    Text("Navigation IKAR : Safe Browsing Android si disponible, contrôle heuristique local des navigations et Privacy Guard (cookies tiers bloqués, géolocalisation refusée, cache et données WebView effacés à la fermeture). Le filtre DNS est un module séparé. Ces protections ne filtrent pas les autres navigateurs ni tout le trafic des applications.")
+                    Text("Navigation IKAR : Safe Browsing Android si disponible, contrôle heuristique local des navigations et Privacy Guard (liste locale limitée de pisteurs tiers, cookies tiers bloqués, géolocalisation et permissions Web refusées, cache et données WebView effacés à la fermeture). Le filtre DNS est un module séparé. Ces protections ne filtrent pas les autres navigateurs ni tout le trafic des applications.")
                     Button(
                         onClick = { context.startActivity(Intent(context, IkarSafeBrowserActivity::class.java)) },
                         modifier = Modifier.fillMaxWidth()
