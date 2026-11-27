@@ -21,7 +21,8 @@ data class FileScanReport(
     val indicators: List<String>,
     val verdict: String,
     val updateAssessment: String? = null,
-    val malwareBazaar: MalwareBazaarReport? = null
+    val malwareBazaar: MalwareBazaarReport? = null,
+    val engines: List<String> = emptyList()
 )
 
 /**
@@ -214,7 +215,8 @@ object FileScanner {
                 indicators = indicators,
                 verdict = verdict,
                 updateAssessment = updateAssessment,
-                malwareBazaar = malwareBazaar
+                malwareBazaar = malwareBazaar,
+                engines = engines
             )
         } finally {
             temp.delete()
