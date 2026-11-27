@@ -184,11 +184,17 @@ class IkarSafeBrowserActivity : Activity() {
                 override fun onPageFinished(view: WebView, url: String?) {
                     if (!url.isNullOrBlank()) {
                         address.setText(url)
-                        status.text = if (currentNavigationSafeBrowsing) {
+                        val trackerCount = blockedTrackerRequests.get()
+                        val trackerSummary = if (privacyModeEnabled && trackerCount > 0) {
+                            " · $trackerCount requête(s) de pistage bloquée(s) dans cette session."
+                        } else {
+                            ""
+                        }
+                        status.text = (if (currentNavigationSafeBrowsing) {
                             "Page chargée · Safe Browsing Android activé pour cette navigation."
                         } else {
                             "Page chargée · Safe Browsing non confirmé pour cette navigation ; contrôles locaux heuristiques uniquement."
-                        }
+                        }) + trackerSummary
                     }
                 }
 
