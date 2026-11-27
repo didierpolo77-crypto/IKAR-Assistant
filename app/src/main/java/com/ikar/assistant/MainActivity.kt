@@ -322,6 +322,11 @@ private fun IkarHome(
     var selectedQuarantineId by remember { mutableStateOf<String?>(null) }
     var folderReport by remember { mutableStateOf<FolderRiskReport?>(null) }
     var folderScanRunning by remember { mutableStateOf(false) }
+    var downloadScanSummary by remember { mutableStateOf<DownloadScanSummary?>(null) }
+    var downloadScanStatus by remember { mutableStateOf("Les fichiers signalés exigent une confirmation SHA-256 exacte avant toute isolation.") }
+    var pendingQuarantineCandidate by remember { mutableStateOf<DownloadScanCandidate?>(null) }
+    var pendingQuarantineHash by remember { mutableStateOf<String?>(null) }
+    var downloadActionUri by remember { mutableStateOf<String?>(null) }
     var vaultBackupStatus by remember { mutableStateOf("Aucune copie de récupération sélectionnée.") }
     var vaultBackupIds by remember { mutableStateOf(RansomwareRecoveryVault.list(context)) }
     var selectedVaultBackupId by remember { mutableStateOf<String?>(null) }
@@ -563,6 +568,14 @@ private fun IkarHome(
                     val report = withContext(Dispatchers.IO) { SecurityCenter.auditFolder(context.applicationContext, uri) }
                     val downloadScan = withContext(Dispatchers.IO) { DownloadedFileScanner.scanTree(context.applicationContext, uri) }
                     folderReport = report
+                    downloadScanSummary = downloadScan
+                    pendingQuarantineCandidate = null
+                    pendingQuarantineHash = null
+                    downloadScanStatus = if (downloadScan.candidates.isEmpty()) {
+                        "Aucun candidat local à confirmer dans ce passage. Les fichiers non vérifiés ne sont pas considérés comme sûrs."
+                    } else {
+                        "${downloadScan.candidates.size} candidat(s) à examiner. Les heuristiques ne déclenchent jamais seules une suppression."
+                    }
                     if (downloadScan.hasAlerts) {
                         val details = (downloadScan.flagged + downloadScan.unscanned).joinToString("; ")
                         Toast.makeText(context, "IKAR : fichier(s) à vérifier dans le dossier choisi. $details", Toast.LENGTH_LONG).show()
@@ -1229,6 +1242,105 @@ private fun IkarHome(
                     Text("${report.inspected} fichiers examinés · ${report.changed} changements")
                     Text("Ajouts : ${report.added} · Modifications : ${report.modified} · Suppressions : ${report.removed}", style = MaterialTheme.typography.bodySmall)
                     report.suspiciousNames.forEach { Text("Extension suspecte : $it", style = MaterialTheme.typography.bodySmall) }
+                }
+
+                downloadScanSummary?.let { summary ->
+                    Divider()
+                    Text("Analyse des téléchargements partagés", style = MaterialTheme.typography.titleMedium)
+                    Text("${summary.scanned} fichier(s) analysé(s) · ${summary.flagged.size} alerte(s) · ${summary.unscanned.size} analyse(s) incomplète(s)", style = MaterialTheme.typography.bodySmall)
+                    Text(downloadScanStatus, style = MaterialTheme.typography.bodySmall)
+                    summary.candidates.forEach { candidate ->
+                        Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                            Text(candidate.name, style = MaterialTheme.typography.bodyMedium)
+                            Text(
+                                "Indices locaux (non assimilés à une preuve) : ${candidate.localReasons.joinToString("; ").take(420)}",
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                            Button(
+                                onClick = {
+                                    downloadActionUri = candidate.uri.toString()
+                                    scope.launch {
+                                        try {
+                                            val confirmed = withContext(Dispatchers.IO) {
+                                                FileScanner.scan(context.applicationContext, candidate.uri, enrichOnline = true)
+                                            }
+                                            if (confirmed.malwareBazaar?.exactHashMatch == true) {
+                                                pendingQuarantineCandidate = candidate
+                                                pendingQuarantineHash = confirmed.sha256
+                                                downloadScanStatus = "Correspondance SHA-256 exacte confirmée par MalwareBazaar pour « ${candidate.name} ». Lis les détails puis confirme séparément l'isolation."
+                                            } else {
+                                                pendingQuarantineCandidate = null
+                                                pendingQuarantineHash = null
+                                                downloadScanStatus = "Pas de correspondance SHA-256 exacte confirmée pour « ${candidate.name} ». Aucune suppression possible. Résultat : ${confirmed.malwareBazaar?.status ?: "service indisponible"}"
+                                            }
+                                        } catch (error: Exception) {
+                                            downloadScanStatus = "Vérification en ligne impossible : ${error.localizedMessage ?: error.javaClass.simpleName}. Le fichier reste intact."
+                                        } finally {
+                                            downloadActionUri = null
+                                        }
+                                    }
+                                },
+                                enabled = downloadActionUri == null
+                            ) {
+                                Text(if (downloadActionUri == candidate.uri.toString()) "Vérification en cours…" else "Vérifier l'empreinte exacte")
+                            }
+                            if (pendingQuarantineCandidate?.uri == candidate.uri && pendingQuarantineHash != null) {
+                                Button(
+                                    onClick = {
+                                        val expectedHash = pendingQuarantineHash
+                                        pendingQuarantineCandidate = null
+                                        pendingQuarantineHash = null
+                                        downloadActionUri = candidate.uri.toString()
+                                        scope.launch {
+                                            try {
+                                                val outcome = withContext(Dispatchers.IO) {
+                                                    FileQuarantineStore.quarantineAndRemove(
+                                                        context.applicationContext,
+                                                        candidate.uri,
+                                                        expectedHash
+                                                    )
+                                                }
+                                                quarantineItems = withContext(Dispatchers.IO) {
+                                                    FileQuarantineStore.list(context.applicationContext)
+                                                }
+                                                quarantineStatus = if (outcome.originalRemoved) {
+                                                    "Copie chiffrée vérifiée et fichier original retiré du dossier partagé : ${outcome.item.name}."
+                                                } else {
+                                                    "Copie chiffrée vérifiée et conservée, mais l'original n'a pas été retiré (droits SAF, fichier modifié ou suppression refusée). Il reste présent."
+                                                }
+                                                downloadScanStatus = quarantineStatus
+                                                withContext(Dispatchers.IO) {
+                                                    ActionAudit.record(
+                                                        memoryDao,
+                                                        "shared_download_quarantine",
+                                                        if (outcome.originalRemoved) "isolated" else "backup_only",
+                                                        "Fichier=${outcome.item.name}; SHA-256 exact MalwareBazaar; originalRemoved=${outcome.originalRemoved}"
+                                                    )
+                                                }
+                                                downloadScanSummary = downloadScanSummary?.copy(
+                                                    candidates = downloadScanSummary?.candidates.orEmpty()
+                                                        .filterNot { it.uri == candidate.uri }
+                                                )
+                                                refreshMemories()
+                                            } catch (error: Exception) {
+                                                quarantineStatus = "Quarantaine interrompue : ${error.localizedMessage ?: error.javaClass.simpleName}. Le fichier original n'est pas volontairement supprimé."
+                                                downloadScanStatus = quarantineStatus
+                                            } finally {
+                                                downloadActionUri = null
+                                            }
+                                        }
+                                    },
+                                    enabled = downloadActionUri == null
+                                ) {
+                                    Text("Confirmer : chiffrer puis tenter de retirer l'original")
+                                }
+                            }
+                        }
+                    }
+                    Text(
+                        "L'isolation n'est proposée qu'après correspondance SHA-256 exacte MalwareBazaar. IKAR chiffre une copie, vérifie son intégrité, revérifie que l'original n'a pas changé, puis tente son retrait avec l'autorisation SAF. Si Android refuse, la copie reste en quarantaine et l'original reste dans le dossier.",
+                        style = MaterialTheme.typography.bodySmall
+                    )
                 }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Column(Modifier.weight(1f)) {
