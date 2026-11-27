@@ -1228,7 +1228,7 @@ private fun IkarHome(
                         Text("Surveillance périodique en arrière-plan")
                         Text(
                             if (savedFolderUri == null) "Choisis d'abord un dossier pour autoriser cette surveillance."
-                            else "Sélectionne le dossier partagé « Download / Téléchargements » : IKAR analysera aussi les fichiers enregistrés par Chrome et les autres applications dans ce dossier (SHA-256 + YARA locale), après leur enregistrement. Les fichiers récents sont laissés finir, puis contrôlés en arrière-plan. Android impose un délai (au moins 15 min pour le contrôle périodique) : ce contrôle ne bloque pas l'écriture avant téléchargement et ne couvre pas les dossiers privés des autres applications.",
+                            else "Sélectionne le dossier partagé « Download / Téléchargements » : IKAR analysera les fichiers enregistrés par Chrome, WhatsApp, Telegram et les autres applications dans ce dossier. Le contrôle combine SHA-256, règles YARA disponibles, type MIME, extension et signatures binaires. Quand IKAR observe un changement MediaStore, il programme un contrôle différé après 2 minutes de calme ; un contrôle périodique complète cette surveillance (au moins 15 minutes, parfois davantage selon Android). Cela détecte après l'enregistrement : cela n'intercepte pas le flux HTTPS avant écriture et ne couvre pas les dossiers privés des autres applications.",
                             style = MaterialTheme.typography.bodySmall
                         )
                     }
@@ -1252,7 +1252,7 @@ private fun IkarHome(
                         }
                     )
                 }
-                Text("Analyse des téléchargements partagés : les nouveaux fichiers sont contrôlés localement après stabilisation. Les fichiers suspects ou non analysables déclenchent une alerte ; IKAR ne supprime aucun fichier automatiquement. Les octets des fichiers ne sont pas envoyés au serveur par ce contrôle. La vérification périodique Android démarre au minimum toutes les 15 minutes et peut être retardée par le système.", style = MaterialTheme.typography.bodySmall)
+                Text("Mode strict des téléchargements partagés : les exécutables, scripts, extensions doubles, signatures binaires suspectes, archives et documents à macros sont signalés. Les fichiers non analysés par tous les moteurs disponibles restent explicitement non vérifiés. IKAR ne supprime ni ne déplace tes fichiers sans confirmation. Les octets des fichiers ne sont pas envoyés au serveur par ce contrôle. La surveillance dépend de l'accès au dossier partagé que tu as sélectionné.", style = MaterialTheme.typography.bodySmall)
                 Text("Observation locale : $observedMediaChanges changement(s) MediaStore pendant la dernière minute ; $observedInstallCount installation(s) ou mise(s) à jour d'applications pendant les dix dernières minutes. IKAR combine ces événements avec les permissions accordées, les accès spéciaux, les notifications autorisées et les audits de dossiers. Observation MediaStore active uniquement quand IKAR est ouvert.", style = MaterialTheme.typography.bodySmall)
                 val deviceBehavior = DeviceBehaviorAnalyzer.assess(observedMediaChanges, observedInstallCount)
                 Text("Corrélation comportementale locale : ${deviceBehavior.level} (${deviceBehavior.score}/100)", style = MaterialTheme.typography.titleSmall)
