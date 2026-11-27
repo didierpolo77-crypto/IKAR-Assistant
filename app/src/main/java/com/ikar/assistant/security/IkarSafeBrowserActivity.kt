@@ -132,15 +132,17 @@ class IkarSafeBrowserActivity : Activity() {
             webViewClient = object : WebViewClient() {
                 override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                     val scheme = request.url.scheme?.lowercase()
-                    if (scheme != "http" && scheme != "https") {
+                    if (scheme != "https") {
                         Toast.makeText(this@IkarSafeBrowserActivity, "Protocole bloqué par IKAR.", Toast.LENGTH_SHORT).show()
                         return true
                     }
                     // Re-check every top-level navigation, including redirects and clicked links.
                     if (request.isForMainFrame) {
                         val target = request.url.toString()
-                        val host = request.url.host.orEmpty()
-                        if (runCatching { ThreatIntelStore.isKnownMaliciousHost(this@IkarSafeBrowserActivity, host) }.getOrDefault(false)) {
+                        val host = normalizeHost(request.url.host.orEmpty())
+                        if (host == null || isIpLiteralHost(host) ||
+                            runCatching { ThreatIntelStore.isKnownMaliciousHost(this@IkarSafeBrowserActivity, host) }.getOrDefault(false)
+                        ) {
                             status.text = "Destination bloquée : domaine présent dans la base locale de menaces."
                             Toast.makeText(this@IkarSafeBrowserActivity, "Domaine malveillant connu bloqué par IKAR.", Toast.LENGTH_LONG).show()
                             return true
@@ -162,9 +164,9 @@ class IkarSafeBrowserActivity : Activity() {
                 }
 
                 override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): android.webkit.WebResourceResponse? {
-                    val host = request.url.host
-                    if (!request.isForMainFrame && !host.isNullOrBlank() &&
-                        runCatching { ThreatIntelStore.isKnownMaliciousHost(this@IkarSafeBrowserActivity, host) }.getOrDefault(false)
+                    val host = normalizeHost(request.url.host.orEmpty())
+                    if (!request.isForMainFrame && (host == null || isIpLiteralHost(host) ||
+                        runCatching { ThreatIntelStore.isKnownMaliciousHost(this@IkarSafeBrowserActivity, host) }.getOrDefault(false))
                     ) {
                         val total = blockedThreatRequests.incrementAndGet()
                         mainHandler.post {
@@ -320,6 +322,15 @@ class IkarSafeBrowserActivity : Activity() {
      * Archives and macro-enabled Office documents require explicit confirmation.
      * Other files use Android DownloadManager; this is not an antivirus scan.
      */
+    private fun normalizeHost(rawHost: String): String? =
+        runCatching {
+            java.net.IDN.toASCII(rawHost.trim().trimEnd('.'), java.net.IDN.USE_STD3_ASCII_RULES)
+                .lowercase().takeIf { it.isNotBlank() && it.length <= 253 }
+        }.getOrNull()
+
+    private fun isIpLiteralHost(host: String): Boolean =
+        host.contains(':') || host.matches(Regex("""\d{1,3}(?:\.\d{1,3}){3}"""))
+
     private fun handleDownload(rawUrl: String, userAgent: String?, contentDisposition: String?, mimeType: String?, contentLength: Long) {
         val downloadUri = runCatching { Uri.parse(rawUrl) }.getOrNull()
         val scheme = downloadUri?.scheme?.lowercase()
@@ -377,18 +388,19 @@ class IkarSafeBrowserActivity : Activity() {
         }
         val archiveExtensions = setOf("zip", "rar", "7z", "tar", "gz", "bz2", "xz", "iso", "img")
         val macroExtensions = setOf("docm", "xlsm", "pptm", "dotm", "xltm", "potm")
+        val unknownOrOpaqueType = extension.isBlank() || normalizedMime.isBlank() ||
+            normalizedMime in setOf("application/octet-stream", "binary/octet-stream", "application/binary")
         val isContainerOrMacro = extension in archiveExtensions || extension in macroExtensions ||
-            normalizedMime in setOf(
+            unknownOrOpaqueType || normalizedMime in setOf(
                 "application/zip", "application/x-7z-compressed", "application/vnd.rar",
                 "application/x-rar-compressed", "application/vnd.ms-word.document.macroenabled.12",
                 "application/vnd.ms-excel.sheet.macroenabled.12",
-                "application/vnd.ms-powerpoint.presentation.macroenabled.12",
-                "application/octet-stream", "binary/octet-stream", "application/binary"
+                "application/vnd.ms-powerpoint.presentation.macroenabled.12"
             )
         val proceed = { enqueueDownload(rawUrl, filename, userAgent, normalizedMime, contentLength) }
         if (isContainerOrMacro) {
             AlertDialog.Builder(this).setTitle("Fichier à examiner avec prudence")
-                .setMessage("« $filename » est une archive ou un document pouvant contenir des macros. IKAR ne peut pas inspecter son contenu avant téléchargement. Ne l'ouvre pas si tu ne connais pas sa provenance.\n\nContinuer le téléchargement ?")
+                .setMessage("« $filename » est une archive, un document à macros ou un fichier dont le type n'est pas clairement identifié. IKAR ne peut pas inspecter son contenu avant téléchargement. Ne l'ouvre pas si tu ne connais pas sa provenance.\n\nContinuer le téléchargement ?")
                 .setNegativeButton("Bloquer", null)
                 .setPositiveButton("Télécharger") { _, _ -> proceed() }.show()
         } else proceed()
@@ -464,14 +476,16 @@ class IkarSafeBrowserActivity : Activity() {
         }
         val uri = runCatching { Uri.parse(normalized) }.getOrNull()
         if (uri == null || uri.host.isNullOrBlank() ||
-            uri.scheme?.lowercase() !in setOf("http", "https")
+            uri.scheme?.lowercase() != "https" || uri.encodedAuthority?.contains("@") == true
         ) {
-            status.text = "Adresse invalide : seuls HTTP et HTTPS sont acceptés."
+            status.text = "Adresse bloquée : HTTPS valide obligatoire, sans identifiants intégrés dans l'URL."
             return
         }
         address.setText(normalized)
-        val parsedHost = uri.host.orEmpty()
-        if (runCatching { ThreatIntelStore.isKnownMaliciousHost(this, parsedHost) }.getOrDefault(false)) {
+        val parsedHost = normalizeHost(uri.host.orEmpty())
+        if (parsedHost == null || isIpLiteralHost(parsedHost) ||
+            runCatching { ThreatIntelStore.isKnownMaliciousHost(this, parsedHost) }.getOrDefault(false)
+        ) {
             status.text = "Web Shield : ce domaine figure dans la base locale de menaces. Navigation bloquée."
             Toast.makeText(this, "Domaine malveillant connu bloqué par IKAR.", Toast.LENGTH_LONG).show()
             return
