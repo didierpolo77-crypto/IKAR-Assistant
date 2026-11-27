@@ -113,10 +113,12 @@ class IkarDnsFirewallService : VpnService() {
             val forwarded = forwardDns(dns)
             if (forwarded == null) {
                 recordDnsResult(host, "error")
-                return null
+                // Return an explicit DNS SERVFAIL instead of leaving the client to time out.
+                makeDnsErrorResponse(dns, rcode = 2)
+            } else {
+                recordDnsResult(host, "allowed")
+                forwarded
             }
-            recordDnsResult(host, "allowed")
-            forwarded
         }
         return buildIpv4UdpResponse(
             sourceIp = destinationIp,
@@ -217,11 +219,14 @@ class IkarDnsFirewallService : VpnService() {
         return labels.joinToString(".").lowercase()
     }
 
-    private fun makeNxdomain(query: ByteArray): ByteArray {
+    private fun makeNxdomain(query: ByteArray): ByteArray =
+        makeDnsErrorResponse(query, rcode = 3)
+
+    private fun makeDnsErrorResponse(query: ByteArray, rcode: Int): ByteArray {
         // Return only the DNS header and original question; discard EDNS/additional records.
         val response = query.copyOf(questionEnd(query) ?: 12)
         val flags = u16(response, 2)
-        putU16(response, 2, (flags and 0x0100) or 0x8083) // QR, RA, NXDOMAIN; preserve RD
+        putU16(response, 2, (flags and 0x0100) or 0x8080 or (rcode and 0x0f))
         putU16(response, 6, 0) // ANCOUNT
         putU16(response, 8, 0) // NSCOUNT
         putU16(response, 10, 0) // ARCOUNT
