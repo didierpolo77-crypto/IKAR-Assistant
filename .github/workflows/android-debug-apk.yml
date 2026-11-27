@@ -10,6 +10,11 @@ on:
 permissions:
   contents: read
 
+# Keep only the newest PR build; a new commit supersedes older APK builds.
+concurrency:
+  group: android-apk-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
