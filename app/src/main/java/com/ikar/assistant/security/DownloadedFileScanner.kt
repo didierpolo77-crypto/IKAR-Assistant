@@ -5,11 +5,19 @@ import android.net.Uri
 import androidx.documentfile.provider.DocumentFile
 import java.security.MessageDigest
 
+data class DownloadScanCandidate(
+    val uri: Uri,
+    val name: String,
+    val sizeBytes: Long,
+    val localReasons: List<String>
+)
+
 data class DownloadScanSummary(
     val scanned: Int,
     val flagged: List<String>,
     val unscanned: List<String>,
-    val limitedEngineFiles: Int
+    val limitedEngineFiles: Int,
+    val candidates: List<DownloadScanCandidate> = emptyList()
 ) {
     val hasAlerts: Boolean get() = flagged.isNotEmpty() || unscanned.isNotEmpty()
 }
@@ -24,7 +32,7 @@ object DownloadedFileScanner {
     private const val MAX_FILES_PER_RUN = 20
     private const val MAX_DEPTH = 8
     private const val SETTLE_DELAY_MS = 90_000L
-    private const val SCANNER_REVISION = "v3"
+    private const val SCANNER_REVISION = "v4"
     private const val CLEAN_VERDICT = "Aucun indicateur détecté par les règles locales disponibles"
 
     fun scanTree(context: Context, treeUri: Uri): DownloadScanSummary {
@@ -33,6 +41,7 @@ object DownloadedFileScanner {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val flagged = mutableListOf<String>()
         val unscanned = mutableListOf<String>()
+        val candidates = mutableListOf<DownloadScanCandidate>()
         var scanned = 0
         var limited = 0
         var deferred = false
@@ -65,6 +74,10 @@ object DownloadedFileScanner {
                         previous == "CLEAN:$signature" -> return@forEach
                         previous == "FLAGGED:$signature" -> {
                             flagged += "$name — indicateur déjà détecté lors d'une analyse précédente ; fichier à examiner/isoler."
+                            candidates += DownloadScanCandidate(
+                                item.uri, name, size,
+                                listOf("Indicateur local déjà relevé ; confirmation exacte MalwareBazaar requise avant toute isolation.")
+                            )
                             return@forEach
                         }
                         previous == "UNSCANNED:$signature" -> {
@@ -118,6 +131,21 @@ object DownloadedFileScanner {
                             flagged += "$name — contenu d'archive à examiner : ${archiveFindings.joinToString("; ")}"
                         }
 
+                        val localReasons = buildList {
+                            addAll(report.indicators)
+                            addAll(highRisk)
+                            addAll(caution)
+                            addAll(archiveFindings)
+                        }.distinct()
+                        if (localReasons.isNotEmpty()) {
+                            candidates += DownloadScanCandidate(
+                                uri = item.uri,
+                                name = name,
+                                sizeBytes = size,
+                                localReasons = localReasons.take(8)
+                            )
+                        }
+
                         val partialReasons = mutableListOf<String>()
                         if (archiveIncomplete != null) {
                             partialReasons += "inspection d'archive incomplète : $archiveIncomplete"
@@ -157,7 +185,8 @@ object DownloadedFileScanner {
             scanned,
             flagged.distinct().take(20),
             unscanned.distinct().take(20),
-            limited
+            limited,
+            candidates.distinctBy { it.uri.toString() }.take(10)
         )
     }
 
