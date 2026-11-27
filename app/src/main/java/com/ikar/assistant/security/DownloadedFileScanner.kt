@@ -94,12 +94,12 @@ object DownloadedFileScanner {
                         val highRisk = risk.highRisk
                         val caution = risk.caution
                         val reportFlagged = report.verdict != CLEAN_VERDICT
-                        if (reportFlagged) flagged += "$name — \${report.verdict}"
+                        if (reportFlagged) flagged += "$name — ${report.verdict}"
                         if (highRisk.isNotEmpty()) {
-                            flagged += "$name — risque élevé : \${highRisk.joinToString("; ")}"
+                            flagged += "$name — risque élevé : ${highRisk.joinToString("; ")}"
                         }
                         if (caution.isNotEmpty()) {
-                            flagged += "$name — prudence : \${caution.joinToString("; ")}"
+                            flagged += "$name — prudence : ${caution.joinToString("; ")}"
                         }
 
                         val partialReasons = mutableListOf<String>()
@@ -115,7 +115,7 @@ object DownloadedFileScanner {
                             partialReasons += "ClamAV non opérationnel ; analyse multicouche incomplète"
                         }
                         if (partialReasons.isNotEmpty()) {
-                            unscanned += "$name — \${partialReasons.joinToString("; ")}. Fichier non certifié sûr."
+                            unscanned += "$name — ${partialReasons.joinToString("; ")}. Fichier non certifié sûr."
                             prefs.edit().putString(uriKey, "UNSCANNED:$signature").apply()
                         } else if (reportFlagged || highRisk.isNotEmpty() || caution.isNotEmpty()) {
                             prefs.edit().putString(uriKey, "FLAGGED:$signature").apply()
@@ -125,7 +125,7 @@ object DownloadedFileScanner {
                     } catch (error: Exception) {
                         scanned++
                         prefs.edit().putString(uriKey, "UNSCANNED:$signature").apply()
-                        unscanned += "$name — \${error.localizedMessage ?: error.javaClass.simpleName}. Fichier non vérifié."
+                        unscanned += "$name — ${error.localizedMessage ?: error.javaClass.simpleName}. Fichier non vérifié."
                     }
                 }
             }
