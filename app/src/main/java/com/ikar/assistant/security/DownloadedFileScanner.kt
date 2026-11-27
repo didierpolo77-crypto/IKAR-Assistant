@@ -91,6 +91,19 @@ object DownloadedFileScanner {
                         val report = FileScanner.scan(context, item.uri, enrichOnline = false)
                         scanned++
 
+                        var archiveFindings = emptyList<String>()
+                        var archiveIncomplete: String? = null
+                        val isZip = header.size >= 4 && header[0] == 0x50.toByte() &&
+                            header[1] == 0x4b.toByte() && header[2] == 0x03.toByte() &&
+                            header[3] == 0x04.toByte()
+                        if (isZip) {
+                            val archiveResult = context.contentResolver.openInputStream(item.uri)?.use { input ->
+                                ArchiveContentInspector.inspect(input, size)
+                            } ?: throw IllegalStateException("Impossible de relire l'archive.")
+                            archiveFindings = archiveResult.findings
+                            archiveIncomplete = archiveResult.incompleteReason
+                        }
+
                         val highRisk = risk.highRisk
                         val caution = risk.caution
                         val reportFlagged = report.verdict != CLEAN_VERDICT
@@ -101,8 +114,14 @@ object DownloadedFileScanner {
                         if (caution.isNotEmpty()) {
                             flagged += "$name — prudence : ${caution.joinToString("; ")}"
                         }
+                        if (archiveFindings.isNotEmpty()) {
+                            flagged += "$name — contenu d'archive à examiner : ${archiveFindings.joinToString("; ")}"
+                        }
 
                         val partialReasons = mutableListOf<String>()
+                        if (archiveIncomplete != null) {
+                            partialReasons += "inspection d'archive incomplète : $archiveIncomplete"
+                        }
                         if (report.engines.any { it.contains("Moteur Kotlin YARA-compatible") }) {
                             limited++
                             partialReasons += "libyara natif indisponible ; sous-ensemble YARA seulement"
